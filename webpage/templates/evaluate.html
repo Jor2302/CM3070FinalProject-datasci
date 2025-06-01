@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Evaluation Results</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1, h2 { color: #2c3e50; }
+        .metrics { margin-bottom: 30px; }
+        .chart { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>📊 Evaluation Results</h1>
+
+    <div class="metrics">
+        <h2>🎯 Main Model</h2>
+        <p><strong>RMSE:</strong> {{ metrics.rmse }}</p>
+        <p><strong>Precision@3:</strong> {{ metrics.precision }}</p>
+    </div>
+
+    <div class="metrics">
+        <h2>🔁 Cross-Validation (5-Fold)</h2>
+        <p><strong>Mean RMSE:</strong> {{ cv.cv_rmse_mean }}</p>
+        <p><strong>Std Dev:</strong> {{ cv.cv_rmse_std }}</p>
+    </div>
+
+    <div class="metrics">
+        <h2>🧠 Matrix Factorisation (SVD)</h2>
+        <p><strong>Avg RMSE:</strong> {{ svd.svd_rmse }}</p>
+        <p><strong>Avg MAE:</strong> {{ svd.svd_mae }}</p>
+    </div>
+
+    <div class="metrics">
+        <h2>📚 Topic Insights (LDA)</h2>
+        <img src="{{ url_for('static', filename='lda_topics.png') }}" alt="Topic summary" class="chart" width="600">
+    </div>
+
+    <div class="metrics">
+        <h2>🗣️ Recent User Feedback</h2>
+        {% if feedback_entries %}
+            <table border="1" cellpadding="6" cellspacing="0">
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User ID</th>
+                    <th>Course Title</th>
+                    <th>Feedback</th>
+                </tr>
+                {% for row in feedback_entries %}
+                    <tr>
+                        <td>{{ row[0] }}</td>
+                        <td>{{ row[1] }}</td>
+                        <td>{{ row[2] }}</td>
+                        <td>{{ row[3] }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>No feedback submitted yet.</p>
+        {% endif %}
+    </div>
+
+    <div style="margin-top: 30px;">
+        <a href="/" style="text-decoration: none;">← Back to Home</a>
+    </div>
+</body>
+</html>

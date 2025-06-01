@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Course Association Rules</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background-color: #f2f2f2; }
+        select { padding: 6px; }
+        .explain { font-size: 0.9em; color: #555; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>📎 Course Association Rule Recommendations</h2>
+
+    <form method="POST">
+        <label for="course_id">Select a Course ID:</label>
+        <select name="course_id" id="course_id">
+            {% for cid in course_options %}
+            <option value="{{ cid }}" {% if course_id == cid %}selected{% endif %}>{{ cid }}</option>
+            {% endfor %}
+        </select>
+        <input type="submit" value="Find Associations">
+    </form>
+
+    {% if explanations %}
+    <h3>Recommendations for Course ID {{ course_id }}</h3>
+    <table>
+        <tr>
+            <th>Also Taken Course ID</th>
+            <th>Support</th>
+            <th>Confidence</th>
+            <th>Lift</th>
+        </tr>
+        {% for row in explanations %}
+        <tr>
+            <td>{{ row.consequent }}</td>
+            <td>{{ row.support }}</td>
+            <td>{{ row.confidence }}</td>
+            <td>{{ row.lift }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <div class="explain">
+        <p><strong>What do these terms mean?</strong></p>
+        <ul>
+            <li><strong>Support</strong>: How often both courses appear together (as % of all users)</li>
+            <li><strong>Confidence</strong>: Among users who took the selected course, how many also took the other one</li>
+            <li><strong>Lift</strong>: How much more likely the other course is taken compared to random chance (Lift > 1 = strong)</li>
+        </ul>
+    </div>
+
+    {% elif course_id %}
+        <p>No association rules found for this course.</p>
+    {% endif %}
+
+    <br><a href="/">← Back to Home</a>
+</body>
+</html>

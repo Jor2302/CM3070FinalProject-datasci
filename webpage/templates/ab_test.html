@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>A/B Test Results</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        table { border-collapse: collapse; width: 50%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h2>📊 A/B Test Evaluation (Simulated)</h2>
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>Number of Ratings</th>
+            <th>Average Rating</th>
+        </tr>
+        {% for row in summary.itertuples() %}
+        <tr>
+            <td>{{ row.version }}</td>
+            <td>{{ row.num_ratings }}</td>
+            <td>{{ "%.2f"|format(row.avg_rating) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <br><a href="/">← Back to Home</a>
+</body>
+</html>

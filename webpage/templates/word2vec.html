@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word2Vec Course Similarity</title>
+</head>
+<body>
+    <h2>📘 Word2Vec: Find Similar Courses</h2>
+    <form method="POST">
+        <input type="text" name="input_title" placeholder="Enter a course title..." size="50">
+        <button type="submit">Find Similar</button>
+    </form>
+
+    {% if results %}
+        <h3>Top Matches:</h3>
+        <ul>
+            {% for row in results %}
+            <li><strong>{{ row.course_title }}</strong> ({{ row.subject }}) – Similarity: {{ row.similarity | round(3) }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <br>
+    <a href="/">← Back to Home</a>
+</body>
+</html>

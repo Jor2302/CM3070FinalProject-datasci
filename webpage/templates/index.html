@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Educational Recommender System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 100px;
+            background-color: #f8f9fa;
+        }
+        h1 {
+            margin-bottom: 40px;
+        }
+        .button {
+            display: inline-block;
+            margin: 20px;
+            padding: 15px 30px;
+            font-size: 18px;
+            text-decoration: none;
+            color: white;
+            background-color: #007bff;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎓 Educational Recommendation System</h1>
+
+    <a href="/recommender_form" class="button">Educational Recommender</a>
+    <a class="button" href="/teacher">👩‍🏫 Teacher Tools</a>
+    <a href="/feedback" class="button">Feedback Form</a>
+    <a href="/user_testing" class="button">User Testing Data</a>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div style="background-color:#d4edda; padding:10px; border-radius:5px; margin-bottom:20px; color:#155724;">
+                {% for message in messages %}
+                    <p>{{ message }}</p>
+                    {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+</body>
+</html>

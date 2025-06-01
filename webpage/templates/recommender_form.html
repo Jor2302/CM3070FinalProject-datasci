@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Course Recommender</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+        }
+        input[type="text"], input[type="number"] {
+            padding: 5px;
+            margin: 5px;
+        }
+        input[type="submit"] {
+            padding: 6px 12px;
+        }
+        ul {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Get Recommendations</h2>
+
+    <form method="POST">
+        <label for="user_id">User ID:</label>
+        <input type="text" name="user_id" placeholder="e.g. user_1" value="{{ user_id }}">
+        <label for="top_n">Top N:</label>
+        <input type="number" name="top_n" value="{{ top_n }}">
+        <input type="submit" value="Submit">
+    </form>
+
+    {% if recommendations %}
+        <h3>Top {{ top_n }} Recommendations for {{ user_id }}</h3>
+        <ul>
+            {% for item in recommendations %}
+                <li><strong>{{ item.course_title }}</strong> — <em>{{ item.explanation }}</em>
+
+                <form method="POST" action="/submit_feedback" style="display:inline;">
+                    <input type="hidden" name="user_id" value="{{ user_id }}">
+                    <input type="hidden" name="course_title" value="{{ item.course_title }}">
+                    <button type="submit" name="feedback" value="thumbs_up">👍</button>
+                    <button type="submit" name="feedback" value="thumbs_down">👎</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <br>
+    <a href="/">← Back to Home</a>
+
+</body>
+</html>

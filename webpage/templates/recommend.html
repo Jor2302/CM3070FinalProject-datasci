@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recommendations for {{ user_id }}</title>
+</head>
+<body>
+    <h2>🎯 Recommendations for {{ user_id }}</h2>
+    <ul>
+        {% for item in recommendations %}
+            <li>
+                <strong>{{ item.course_title }}</strong> — 
+                <em>{{ item.explanation }}</em>
+  
+                <form method="POST" action="/submit_feedback" style="display:inline;">
+                <input type="hidden" name="user_id" value="{{ user_id }}">
+                <input type="hidden" name="course_title" value="{{ item.course_title }}">
+                <button type="submit" name="feedback" value="thumbs_up">👍</button>
+                <button type="submit" name="feedback" value="thumbs_down">👎</button>
+            </form>
+        </li>
+
+        {% endfor %}
+    </ul>
+    <br>
+    <a href="/">← Back to Home</a>
+</body>
+</html>

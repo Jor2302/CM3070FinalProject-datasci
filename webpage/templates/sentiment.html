@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sentiment Analysis</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        textarea { width: 100%; padding: 10px; }
+        input[type="submit"] { padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h2>🧠 Sentiment Analysis</h2>
+    <form method="POST">
+        <label>Enter your text:</label><br>
+        <textarea name="text" rows="4" required></textarea><br><br>
+        <input type="submit" value="Analyze">
+    </form>
+
+    {% if result %}
+        <h3>Result: {{ result.upper() }}</h3>
+        <p>{{ explanation }}</p>
+    {% endif %}
+
+    <br>
+    <a href="/">← Back to Home</a>
+</body>
+</html>

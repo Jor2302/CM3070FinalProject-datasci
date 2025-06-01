@@ -1,0 +1,30 @@
+<form method="POST">
+    <label>User ID:</label>
+    <input type="text" name="user_id" required>
+
+    <label>Course ID:</label>
+    <select name="course_id" required>
+        {% for cid in course_ids %}
+            <option value="{{ cid }}">{{ cid }}</option>
+        {% endfor %}
+    </select>
+
+    <label>Rating:</label>
+    <select name="rating" required>
+        <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+        <option value="4">⭐⭐⭐⭐ (4)</option>
+        <option value="3">⭐⭐⭐ (3)</option>
+        <option value="2">⭐⭐ (2)</option>
+        <option value="1">⭐ (1)</option>
+    </select>
+
+    <label>Feedback:</label>
+    <textarea name="feedback" rows="4" required></textarea>
+
+    <input type="submit" value="Submit Feedback">
+
+    <br><br>
+    <a href="/" style="margin-right: 20px;">← Back to Home</a>
+    <a href="/course_list">📘 View Course ID & Name List</a>
+
+</form>
