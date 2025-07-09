@@ -1,31 +1,16 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>A/B Test Results</title>
-    <style>
-        body { font-family: Arial; padding: 20px; }
-        table { border-collapse: collapse; width: 50%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-    </style>
-</head>
-<body>
-    <h2>📊 A/B Test Evaluation (Simulated)</h2>
-    <table>
-        <tr>
-            <th>Version</th>
-            <th>Number of Ratings</th>
-            <th>Average Rating</th>
-        </tr>
-        {% for row in summary.itertuples() %}
-        <tr>
-            <td>{{ row.version }}</td>
-            <td>{{ row.num_ratings }}</td>
-            <td>{{ "%.2f"|format(row.avg_rating) }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+<h2>📊 A/B Test Results</h2>
 
-    <br><a href="/">← Back to Home</a>
-</body>
-</html>
+{% if results.error %}
+<p>Error: {{ results.error }}</p>
+{% else %}
+<table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Group A Avg Rating (CF)</td><td>{{ results.group_a_avg }}</td></tr>
+    <tr><td>Group B Avg Rating (Hybrid)</td><td>{{ results.group_b_avg }}</td></tr>
+    <tr><td>t-statistic</td><td>{{ results.t_stat }}</td></tr>
+    <tr><td>p-value</td><td>{{ results.p_value }}</td></tr>
+    <tr><td>Conclusion</td><td><strong>{{ results.conclusion }}</strong></td></tr>
+</table>
+{% endif %}
+
+<br><a href="/">← Back to Home</a>

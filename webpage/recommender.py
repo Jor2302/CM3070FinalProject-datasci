@@ -1,5 +1,5 @@
 import os
-os.environ["USE_TF"] = "0"  # Disable TensorFlow in sentence-transformers
+os.environ["USE_TF"] = "0"  # Disable TensorFlow usage in sentence-transformers to reduce resource usage
 
 import pandas as pd
 import numpy as np
@@ -8,39 +8,41 @@ from sklearn.cluster import KMeans
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Load data
+# Load required datasets
 course_df = pd.read_csv("data/udemy_course_data.csv")
 ratings_df = pd.read_csv("data/User-Item_Rating_Matrix.csv", index_col=0)
 interactions_df = pd.read_csv("data/Synthetic_Interactions.csv")
 
-# Preprocessing
+# Preprocessing: Convert course_id to int and user_id to string, create text column for NLP
 course_df['course_id'] = course_df['course_id'].astype(int)
 interactions_df['course_id'] = interactions_df['course_id'].astype(int)
 interactions_df['user_id'] = interactions_df['user_id'].astype(str).str.strip()
 course_df['text'] = course_df['course_title'] + " " + course_df['subject'].astype(str)
 
-# TF-IDF model
+# Train TF-IDF model on course text
 tfidf = TfidfVectorizer(stop_words='english')
 tfidf_matrix = tfidf.fit_transform(course_df['text'])
 
-# BERT embeddings
+# Generate BERT sentence embeddings for each course
 bert_model = SentenceTransformer('all-MiniLM-L6-v2')
 bert_embeddings = bert_model.encode(course_df['text'].tolist(), show_progress_bar=False)
 
-# User clustering
+# Cluster users using KMeans on rating matrix
 user_vectors = ratings_df.fillna(0).values
 kmeans = KMeans(n_clusters=5, random_state=42)
 user_clusters = kmeans.fit_predict(user_vectors)
 user_cluster_map = dict(zip(ratings_df.index, user_clusters))
 
+# Main recommendation function
 def get_recommendations(user_id, top_n=5):
     user_id = user_id.strip()
     print(f"📥 Incoming user ID: {user_id}")
 
-    # --- Feedback-based Reranking ---
+    # === 1. Feedback-based reranking ===
     feedback_path = "data/user_feedback.csv"
     if os.path.exists(feedback_path):
         feedback_df = pd.read_csv(feedback_path)
+        # Find liked courses
         positive_courses = feedback_df[
             (feedback_df['user_id'] == user_id) &
             (feedback_df['feedback'] == 'thumbs_up')
@@ -58,7 +60,7 @@ def get_recommendations(user_id, top_n=5):
             } for i in boost_indices]
             return feedback_boosted
 
-    # --- Cold-start fallback ---
+    # === 2. Cold-start: Use BERT similarity ===
     if user_id not in ratings_df.index:
         print("🧊 Cold-start detected → BERT fallback")
         course_scores = cosine_similarity([bert_embeddings[0]], bert_embeddings).flatten()
@@ -68,7 +70,7 @@ def get_recommendations(user_id, top_n=5):
             "explanation": "Cold-start recommendation via BERT"
         } for i in top_indices]
 
-    # --- Collaborative Filtering ---
+    # === 3. Collaborative Filtering: Use user interaction data ===
     if user_id in interactions_df['user_id'].values:
         print("🤝 Found interaction data → Collaborative Filtering")
         user_data = interactions_df[interactions_df['user_id'] == user_id]
@@ -84,7 +86,7 @@ def get_recommendations(user_id, top_n=5):
         if results:
             return results
 
-    # --- TF-IDF fallback ---
+    # === 4. TF-IDF fallback: Based on liked course similarity ===
     print("🔁 Using TF-IDF fallback")
     user_ratings = ratings_df.loc[user_id].fillna(0)
     liked_courses = [
@@ -103,7 +105,7 @@ def get_recommendations(user_id, top_n=5):
             "explanation": "TF-IDF content similarity"
         } for i in top_indices]
 
-    # --- Cluster-based fallback ---
+    # === 5. Cluster-based fallback: Recommend popular items in user's cluster ===
     print("🧠 Using cluster-based fallback")
     user_cluster = user_cluster_map.get(user_id, None)
     if user_cluster is not None:
@@ -126,8 +128,27 @@ def get_recommendations(user_id, top_n=5):
         if results:
             return results
 
+    # If no data found, return fallback message
     print("❌ No useful data found for this user")
     return [{
         "course_title": "No data available",
         "explanation": "User not found in any dataset"
     }]
+
+    # [Unreachable] Legacy user profile adjustment logic (not executed)
+    top_rated = load_user_profile(user_id)
+    if top_rated:
+        recs_df['priority'] = recs_df['course_id'].apply(lambda cid: 1 if cid in top_rated else 0)
+        recs_df = recs_df.sort_values(by=['priority', 'score'], ascending=False)
+
+# Load user profile (ratings stored by user)
+def load_user_profile(user_id, profile_path="data/user_profiles.csv"):
+    try:
+        df = pd.read_csv(profile_path, names=["user_id", "course_id", "rating"])
+        user_data = df[df['user_id'] == user_id]
+        if user_data.empty:
+            return []
+        return user_data.sort_values(by="rating", ascending=False)['course_id'].tolist()
+    except Exception as e:
+        print("Profile load error:", e)
+        return []

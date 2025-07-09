@@ -1,30 +1,115 @@
-<form method="POST">
-    <label>User ID:</label>
-    <input type="text" name="user_id" required>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submit Feedback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f9f9f9;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .nav-links {
+            margin-top: 20px;
+        }
+        .nav-links a {
+            margin-right: 20px;
+            text-decoration: none;
+            color: #007bff;
+        }
+        .feedback-result {
+            background-color: #eef;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 8px;
+            border-left: 5px solid #337ab7;
+        }
+        .feedback-positive {
+            color: green;
+            font-weight: bold;
+        }
+        .feedback-negative {
+            color: red;
+            font-weight: bold;
+        }
+        .feedback-neutral {
+            color: gray;
+            font-weight: bold;
+        }
+        .classification-label {
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
 
-    <label>Course ID:</label>
-    <select name="course_id" required>
-        {% for cid in course_ids %}
-            <option value="{{ cid }}">{{ cid }}</option>
-        {% endfor %}
-    </select>
+    <h2>📝 Submit Course Feedback</h2>
 
-    <label>Rating:</label>
-    <select name="rating" required>
-        <option value="5">⭐⭐⭐⭐⭐ (5)</option>
-        <option value="4">⭐⭐⭐⭐ (4)</option>
-        <option value="3">⭐⭐⭐ (3)</option>
-        <option value="2">⭐⭐ (2)</option>
-        <option value="1">⭐ (1)</option>
-    </select>
+    <form method="POST">
+        <label>User ID:</label>
+        <input type="text" name="user_id" required>
 
-    <label>Feedback:</label>
-    <textarea name="feedback" rows="4" required></textarea>
+        <label>Course ID:</label>
+        <input type="number" name="course_id" required>
 
-    <input type="submit" value="Submit Feedback">
+        <label>Rating:</label>
+        <select name="rating" required>
+            <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+            <option value="4">⭐⭐⭐⭐ (4)</option>
+            <option value="3">⭐⭐⭐ (3)</option>
+            <option value="2">⭐⭐ (2)</option>
+            <option value="1">⭐ (1)</option>
+        </select>
 
-    <br><br>
-    <a href="/" style="margin-right: 20px;">← Back to Home</a>
-    <a href="/course_list">📘 View Course ID & Name List</a>
+        <label>Feedback:</label>
+        <textarea name="feedback" rows="4" placeholder="Share your thoughts..." required></textarea>
 
-</form>
+        <input type="submit" value="Submit Feedback">
+
+        <div class="nav-links">
+            <a href="/">← Back to Home</a>
+            <a href="/course_list">📘 View Course ID & Name List</a>
+        </div>
+    </form>
+
+    {% if show_result %}
+    {% set sentiment_class = 'feedback-positive' if sentiment == 'positive' else 'feedback-negative' if sentiment == 'negative' else 'feedback-neutral' %}
+    <div class="feedback-result">
+        <h3>✅ Feedback Processed</h3>
+        <p><strong>Sentiment:</strong>
+            <span class="{{ sentiment_class }}">{{ sentiment|capitalize }}</span>
+        </p>
+        <p><strong>Classification:</strong>
+            <span class="classification-label">{{ classification|capitalize }}</span>
+        </p>
+    </div>
+    {% endif %}
+
+</body>
+</html>

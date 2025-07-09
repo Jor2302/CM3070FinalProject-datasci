@@ -35,15 +35,26 @@
         <h3>Top {{ top_n }} Recommendations for {{ user_id }}</h3>
         <ul>
             {% for item in recommendations %}
-                <li><strong>{{ item.course_title }}</strong> — <em>{{ item.explanation }}</em>
+                <li>
+                    <strong>{{ item.course_title }}</strong> — <em>{{ item.explanation }}</em>
 
-                <form method="POST" action="/submit_feedback" style="display:inline;">
-                    <input type="hidden" name="user_id" value="{{ user_id }}">
-                    <input type="hidden" name="course_title" value="{{ item.course_title }}">
-                    <button type="submit" name="feedback" value="thumbs_up">👍</button>
-                    <button type="submit" name="feedback" value="thumbs_down">👎</button>
-                </form>
-            </li>
+                    <form method="POST" action="/submit_feedback" style="display:inline;">
+                        <input type="hidden" name="user_id" value="{{ user_id }}">
+                        <input type="hidden" name="course_title" value="{{ item.course_title }}">
+                        <input type="text" name="feedback_comment" placeholder="Optional comment" style="margin-left:10px;">
+                        <button type="submit" name="feedback" value="thumbs_up">👍</button>
+                        <button type="submit" name="feedback" value="thumbs_down">👎</button>
+                    </form>
+
+                    {% if show_feedback and item.course_title == course_title %}
+                    <div style="margin-top: 20px; padding: 10px; background-color: #eef;">
+                        <h3>📝 Feedback Received</h3>
+                        <p><strong>Your Comment:</strong> {{ comment }}</p>
+                        <p><strong>Sentiment:</strong> {{ sentiment }}</p>
+                        <p><strong>Classification:</strong> {{ classification }}</p>
+                    </div>
+                    {% endif %}
+                </li>
             {% endfor %}
         </ul>
     {% endif %}

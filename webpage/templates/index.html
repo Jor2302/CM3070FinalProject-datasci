@@ -6,43 +6,62 @@
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            padding-top: 100px;
+            padding: 60px 20px;
             background-color: #f8f9fa;
         }
         h1 {
+            margin-bottom: 10px;
+            font-size: 36px;
+            color: #2c3e50;
+        }
+        p.description {
+            font-size: 18px;
+            color: #555;
             margin-bottom: 40px;
         }
         .button {
             display: inline-block;
-            margin: 20px;
-            padding: 15px 30px;
-            font-size: 18px;
+            margin: 10px;
+            padding: 14px 24px;
+            font-size: 16px;
             text-decoration: none;
             color: white;
             background-color: #007bff;
-            border-radius: 8px;
+            border: none;
+            border-radius: 10px;
             transition: background-color 0.3s ease;
         }
         .button:hover {
             background-color: #0056b3;
+        }
+        h3 {
+            margin-top: 40px;
+            color: #333;
         }
     </style>
 </head>
 <body>
 
     <h1>🎓 Educational Recommendation System</h1>
+    <p class="description">A data-driven platform that recommends personalised learning content, collects feedback, and improves continuously through real user interaction.</p>
 
-    <a href="/recommender_form" class="button">Educational Recommender</a>
-    <a class="button" href="/teacher">👩‍🏫 Teacher Tools</a>
-    <a href="/feedback" class="button">Feedback Form</a>
-    <a href="/user_testing" class="button">User Testing Data</a>
+    <h3>🧑‍🎓 Learner Tools</h3>
+    <a href="/recommender_form" class="button">🎯 Educational Recommender</a>
+    <a href="/word2vec" class="button">📚 Course Recommendations</a>
+    <a href="/feedback" class="button">📝 Feedback Form</a>
+    <a href="/user_testing" class="button">📬 User Feedback</a>
+
+    <h3>👩‍🏫 Teacher Tools</h3>
+    <a href="/rules" class="button">📎 Association Rules</a>
+    <a href="/evaluate" class="button">📊 Evaluation Dashboard</a>
+    <a class="button" href="/ab_test">A/B Test</a>
 
     {% with messages = get_flashed_messages() %}
         {% if messages %}
-            <div style="background-color:#d4edda; padding:10px; border-radius:5px; margin-bottom:20px; color:#155724;">
+            <div style="background-color:#d4edda; padding:10px; border-radius:5px; margin-top:30px; color:#155724;">
                 {% for message in messages %}
                     <p>{{ message }}</p>
-                    {% endfor %}
+                {% endfor %}
             </div>
         {% endif %}
     {% endwith %}

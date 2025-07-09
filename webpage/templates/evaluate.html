@@ -36,30 +36,6 @@
         <img src="{{ url_for('static', filename='lda_topics.png') }}" alt="Topic summary" class="chart" width="600">
     </div>
 
-    <div class="metrics">
-        <h2>🗣️ Recent User Feedback</h2>
-        {% if feedback_entries %}
-            <table border="1" cellpadding="6" cellspacing="0">
-                <tr>
-                    <th>Timestamp</th>
-                    <th>User ID</th>
-                    <th>Course Title</th>
-                    <th>Feedback</th>
-                </tr>
-                {% for row in feedback_entries %}
-                    <tr>
-                        <td>{{ row[0] }}</td>
-                        <td>{{ row[1] }}</td>
-                        <td>{{ row[2] }}</td>
-                        <td>{{ row[3] }}</td>
-                    </tr>
-                {% endfor %}
-            </table>
-        {% else %}
-            <p>No feedback submitted yet.</p>
-        {% endif %}
-    </div>
-
     <div style="margin-top: 30px;">
         <a href="/" style="text-decoration: none;">← Back to Home</a>
     </div>

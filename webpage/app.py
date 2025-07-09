@@ -5,8 +5,8 @@ from sentiment_analysis import analyze_sentiment
 from association_rules import explain_rules_for_course
 from word2vec_similarity import get_similar_courses
 from classifier import classify_text
-from ab_testing import simulate_ab_test
 from flask import flash, get_flashed_messages
+from ab_testing import run_ab_test_real_feedback
 
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 import csv
@@ -65,16 +65,6 @@ def evaluate_page():
                            svd=svd,
                            feedback_entries=feedback_entries)
 
-@app.route('/sentiment', methods=['GET', 'POST'])
-def sentiment():
-    result = None
-    explanation = ""
-    if request.method == 'POST':
-        text = request.form.get('text')
-        result, explanation = analyze_sentiment(text)
-    return render_template("sentiment.html", result=result, explanation=explanation)
-
-
 
 # Load valid course IDs for dropdown
 valid_course_ids = [200742, 574194, 647884, 755198, 869312, 1239206]
@@ -97,35 +87,13 @@ def word2vec_page():
         results = get_similar_courses(input_title)
     return render_template('word2vec.html', results=results)
 
-@app.route('/classifier', methods=['GET', 'POST'])
-def classify():
-    result = None
-    explanation = ""
-    if request.method == 'POST':
-        text = request.form.get('text')
-        result, explanation = classify_text(text)
-    return render_template("classifier.html", result=result, explanation=explanation)
-
 
 
 @app.route('/ab_test')
-def abtest():
-    # Load the real user feedback
-    df = pd.read_csv('data/real_users.csv')
-    
-    # Assign version A or B randomly for simulation
-    df['version'] = df['user_id'].apply(lambda x: random.choice(['A', 'B']))
+def ab_test():
+    results = run_ab_test_real_feedback()
+    return render_template("ab_test.html", results=results)
 
-    # Calculate average rating for each version
-    summary = df.groupby('version')['rating'].agg(['count', 'mean']).reset_index()
-    summary.columns = ['version', 'num_ratings', 'avg_rating']
-
-    return render_template("ab_test.html", summary=summary)
-
-
-@app.route('/teacher')
-def teacher_tools():
-    return render_template('teacher.html')
 
 
 @app.route('/user_testing')
@@ -141,30 +109,84 @@ def user_testing():
 
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
-    message = ""
-    course_df = pd.read_csv("data/udemy_course_data.csv")
-    course_ids = course_df['course_id'].dropna().unique().tolist()
-    course_ids.sort()
-
     if request.method == 'POST':
-        user_id = request.form.get('user_id')
-        course_id = request.form.get('course_id')
-        feedback_text = request.form.get('feedback')
-        rating = request.form.get('rating')
+        user_id = request.form['user_id']
+        course_id = int(request.form['course_id'])
+        feedback_text = request.form['feedback']
+        rating = float(request.form['rating'])
 
-        with open('data/real_users.csv', 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow([datetime.now().isoformat(), user_id, course_id, feedback_text, rating])
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        message = "✅ Feedback submitted to real_users.csv!"
+        from sentiment_analysis import analyze_sentiment
+        from classifier import classify_text
 
-    return render_template('feedback.html', message=message, course_ids=course_ids)
+        sentiment, _ = analyze_sentiment(feedback_text)
+        classification, _ = classify_text(feedback_text)
+
+        with open('data/user_feedback.csv', 'a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([timestamp, user_id, course_id, feedback_text, rating, sentiment, classification])
+
+        with open('data/user_profiles.csv', 'a', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow([user_id, course_id, rating])
+
+        return render_template(
+            'feedback.html',
+            show_result=True,
+            sentiment=sentiment,
+            classification=classification
+        )
+
+
+    return render_template('feedback.html', show_result=False)
+
+
 
 @app.route('/course_list')
 def course_list():
     course_df = pd.read_csv("data/udemy_course_data.csv")
     course_table = course_df[['course_id', 'course_title']].dropna().drop_duplicates().sort_values(by='course_id')
     return render_template("course_list.html", course_table=course_table)
+
+
+@app.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    user_id = request.form.get('user_id')
+    course_title = request.form.get('course_title')
+    feedback = request.form.get('feedback')
+    feedback_comment = request.form.get('feedback_comment', '')
+
+    from sentiment_analysis import analyze_sentiment
+    from classifier import classify_text
+
+    sentiment, sentiment_expl = analyze_sentiment(feedback_comment)
+    classification, class_expl = classify_text(feedback_comment)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(feedback_file, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            timestamp, user_id, course_title, feedback,
+            feedback_comment, sentiment, classification
+        ])
+
+    # Get updated recommendations again
+    results = get_recommendations(user_id, top_n=5)
+
+    return render_template(
+        'recommend.html',
+        user_id=user_id,
+        recommendations=results,
+        show_feedback=True,
+        course_title=course_title,
+        comment=feedback_comment,
+        sentiment=sentiment,
+        classification=classification
+    )
+
+    return redirect(url_for('home'))
 
 
 if __name__ == '__main__':
