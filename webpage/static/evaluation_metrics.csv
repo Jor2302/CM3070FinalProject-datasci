@@ -1,0 +1,11 @@
+metric,value
+RMSE (headline),0.47
+Precision@3 (headline),0.831
+CV RMSE (mean),0.474
+CV RMSE (std),0.017
+SVD RMSE (CV),0.725
+SVD MAE (CV),0.623
+P@5 Popularity,0.0
+P@5 SVD,0.0
+AUC(PR),0.319
+AUC(ROC),0.459

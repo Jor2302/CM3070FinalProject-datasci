@@ -1,25 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Word2Vec Course Similarity</title>
+  <meta charset="UTF-8" />
+  <title>Word2Vec Course Similarity</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background:#fafafa; }
+    h2 { margin-top: 0; color:#2c3e50; }
+    form { margin-bottom: 12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    input[type="text"] { padding: 8px; width: 520px; max-width: 100%; }
+    input[type="number"] { width: 70px; padding: 6px; }
+    button { padding: 8px 14px; }
+    ul { list-style: none; padding-left: 0; }
+    li { background:#fff; margin: 6px 0; padding:10px; border:1px solid #e6e6e6; }
+    .muted { color:#666; font-size:12px; }
+    mark { background: #fff59d; }
+  </style>
 </head>
 <body>
-    <h2>📘 Word2Vec: Find Similar Courses</h2>
-    <form method="POST">
-        <input type="text" name="input_title" placeholder="Enter a course title..." size="50">
-        <button type="submit">Find Similar</button>
-    </form>
+  <h2>📘 Word2Vec: Find Similar Courses</h2>
 
-    {% if results %}
-        <h3>Top Matches:</h3>
-        <ul>
-            {% for row in results %}
-            <li><strong>{{ row.course_title }}</strong> ({{ row.subject }}) – Similarity: {{ row.similarity | round(3) }}</li>
-            {% endfor %}
-        </ul>
+  <form method="POST">
+    <input
+      type="text"
+      name="input_title"
+      list="title_suggestions"
+      placeholder="Enter a course title (e.g., Python data analysis)..."
+      value="{{ input_title or '' }}"
+      autocomplete="off"
+    />
+    <datalist id="title_suggestions">
+      {% for t in suggestions %}
+        <option value="{{ t }}"></option>
+      {% endfor %}
+    </datalist>
+
+    <label for="top_n" class="muted">Top-N</label>
+    <input type="number" id="top_n" name="top_n" min="1" max="20" value="{{ top_n or 5 }}" />
+    <button type="submit">Find Similar</button>
+  </form>
+
+  {% if results is not none %}
+    {% if results|length == 0 %}
+      <p class="muted">
+        No close matches found.
+        Try a broader title or pick from the suggestions dropdown above.
+      </p>
+    {% else %}
+      <h3>Top Matches:</h3>
+      <ul>
+        {% for row in results %}
+          <li>
+            <strong>{{ row.title_highlight | safe }}</strong>
+            <div class="muted">{{ row.subject }}</div>
+            <div>Similarity: {{ (row.similarity)|round(3) }}</div>
+          </li>
+        {% endfor %}
+      </ul>
     {% endif %}
+  {% endif %}
 
-    <br>
-    <a href="/">← Back to Home</a>
+  <p><a href="/">← Back to Home</a></p>
 </body>
 </html>

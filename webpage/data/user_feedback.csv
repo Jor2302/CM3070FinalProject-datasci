@@ -18,3 +18,23 @@ timestamp,user_id,course_title,feedback,comment,sentiment,classification
 2025-06-09 03:26:44,user_03,11153,good,5.0,positive,engaged
 2025-06-11 03:22:28,user_45,17922,good very postive,5.0,positive,engaged
 2025-06-11 03:26:48,user_45,15285,good postive,5.0,positive,engaged
+2025-06-11 11:12:02,user_05,9333,very helpful,4.0,positive,engaged
+2025-06-11 11:14:37,user_07,8384,okay,3.0,neutral,not engaged
+2025-06-11 11:15:55,user_08,17922,did not like,2.0,negative,not engaged
+2025-06-11 11:16:41,user_09,9833,excellent,5.0,positive,engaged
+2025-06-11 11:18:27,user_10,8324,not bad,4.0,neutral,engaged
+2025-06-11 11:21:13,user_05,11153,poorly structured,2.0,negative,not engaged
+2025-06-11 11:24:22,user_07,15285,loved it!,5.0,positive,engaged
+2025-06-11 11:28:55,user_08,9333,hard to follow,2.0,negative,not engaged
+2025-06-11 11:32:10,user_12,8384,recommended,4.0,positive,engaged
+2025-06-11 11:36:29,user_09,93232,average,3.0,neutral,not engaged
+2025-06-11 11:37:50,user_10,17922,pretty good,4.0,positive,engaged
+2025-06-11 11:39:43,user_13,9833,would not recommend,1.0,negative,not engaged
+2025-06-11 11:44:12,user_14,8324,excellent resource,5.0,positive,engaged
+2025-06-11 11:46:30,user_12,9333,decent,3.0,neutral,not engaged
+2025-06-11 11:48:17,user_07,11153,needs improvement,2.0,negative,not engaged
+2025-06-11 11:49:59,user_13,15285,helpful,4.0,positive,engaged
+2025-06-11 11:52:21,user_15,8384,clear explanations,5.0,positive,engaged
+2025-06-11 11:53:12,user_14,9833,not engaging,2.0,negative,not engaged
+2025-06-11 11:55:45,user_10,93232,very useful,5.0,positive,engaged
+2025-06-11 11:59:27,user_15,8324,too fast,3.0,neutral,not engaged

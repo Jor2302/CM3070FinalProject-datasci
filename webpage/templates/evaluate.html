@@ -1,43 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Evaluation Results</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        h1, h2 { color: #2c3e50; }
-        .metrics { margin-bottom: 30px; }
-        .chart { margin-top: 20px; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Evaluation Results</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h1, h2 { color: #2c3e50; margin: 0 0 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .kpi { margin: 6px 0; }
+    img { max-width: 100%; height: auto; border-radius: 8px; }
+    .btns a { display:inline-block; margin-right:10px; padding:8px 12px; border:1px solid #333; border-radius:8px; text-decoration:none; color:#111; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 14px; }
+    th { background: #f7f7f7; text-align: left; }
+  </style>
 </head>
 <body>
-    <h1>📊 Evaluation Results</h1>
+  <h1>📊 Evaluation Results</h1>
 
-    <div class="metrics">
-        <h2>🎯 Main Model</h2>
-        <p><strong>RMSE:</strong> {{ metrics.rmse }}</p>
-        <p><strong>Precision@3:</strong> {{ metrics.precision }}</p>
+  <div class="grid">
+    <div class="card">
+      <h2>🎯 Main Model</h2>
+      <div class="kpi"><strong>RMSE:</strong> {{ metrics.rmse }}</div>
+      <div class="kpi"><strong>Precision@3:</strong> {{ metrics.precision }}</div>
+      <div class="btns" style="margin-top:10px;">
+        {% if files.metrics_csv %}
+          <a href="{{ url_for('static', filename='evaluation_metrics.csv') }}" download>Download metrics CSV</a>
+        {% endif %}
+      </div>
     </div>
 
-    <div class="metrics">
-        <h2>🔁 Cross-Validation (5-Fold)</h2>
-        <p><strong>Mean RMSE:</strong> {{ cv.cv_rmse_mean }}</p>
-        <p><strong>Std Dev:</strong> {{ cv.cv_rmse_std }}</p>
+    <div class="card">
+      <h2>🔁 Cross-Validation (5-Fold)</h2>
+      <div class="kpi"><strong>Mean RMSE:</strong> {{ cv.cv_rmse_mean }}</div>
+      <div class="kpi"><strong>Std Dev:</strong> {{ cv.cv_rmse_std }}</div>
     </div>
 
-    <div class="metrics">
-        <h2>🧠 Matrix Factorisation (SVD)</h2>
-        <p><strong>Avg RMSE:</strong> {{ svd.svd_rmse }}</p>
-        <p><strong>Avg MAE:</strong> {{ svd.svd_mae }}</p>
+    <div class="card">
+      <h2>🧠 Matrix Factorisation (SVD)</h2>
+      <div class="kpi"><strong>Avg RMSE:</strong> {{ svd.svd_rmse }}</div>
+      <div class="kpi"><strong>Avg MAE:</strong> {{ svd.svd_mae }}</div>
     </div>
 
-    <div class="metrics">
-        <h2>📚 Topic Insights (LDA)</h2>
-        <img src="{{ url_for('static', filename='lda_topics.png') }}" alt="Topic summary" class="chart" width="600">
+    <div class="card">
+      <h2>📈 Top-N Precision (±SD)</h2>
+      <div class="kpi"><strong>P@5 (Popularity):</strong> {{ baselines.p_at5_popularity }}</div>
+      <div class="kpi"><strong>P@5 (SVD):</strong> {{ baselines.p_at5_svd }}</div>
+      {% if baselines.bar_img %}
+        <img src="{{ url_for('static', filename='precision_bar.png') }}" alt="Precision bar chart" />
+      {% endif %}
     </div>
 
-    <div style="margin-top: 30px;">
-        <a href="/" style="text-decoration: none;">← Back to Home</a>
+    <div class="card">
+      <h2>🔍 Precision-Recall</h2>
+      <div class="kpi"><strong>AUC(PR):</strong> {{ curves.auc_pr }}</div>
+      {% if curves.pr_img %}
+        <img src="{{ url_for('static', filename='pr_curve.png') }}" alt="PR curve" />
+      {% else %}
+        <p>No PR curve available.</p>
+      {% endif %}
     </div>
+
+    <div class="card">
+      <h2>🧪 ROC Curve</h2>
+      <div class="kpi"><strong>AUC(ROC):</strong> {{ curves.auc_roc }}</div>
+      {% if curves.roc_img %}
+        <img src="{{ url_for('static', filename='roc_curve.png') }}" alt="ROC curve" />
+      {% else %}
+        <p>No ROC curve available.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>📚 Topic Insights (LDA)</h2>
+      <img src="{{ url_for('static', filename='lda_topics.png') }}" alt="Topic summary" />
+    </div>
+
+    <div class="card">
+      <h2>📝 Recent Feedback</h2>
+      {% if feedback_header and feedback_rows %}
+        <table>
+          <thead>
+            <tr>
+              {% for h in feedback_header %}
+                <th>{{ h }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in feedback_rows[:15] %}
+              <tr>
+                {% for cell in row %}
+                  <td>{{ cell }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p style="font-size:12px;color:#666;margin-top:6px;">Showing first 15 rows from data/user_feedback.csv</p>
+      {% else %}
+        <p>No feedback captured yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="margin-top: 30px;">
+    <a href="/" style="text-decoration:none;">← Back to Home</a>
+  </div>
 </body>
 </html>

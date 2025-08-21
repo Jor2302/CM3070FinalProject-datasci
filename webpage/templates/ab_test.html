@@ -1,16 +1,63 @@
-<h2>📊 A/B Test Results</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>A/B Test Results</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; }
+    h1 { color: #2c3e50; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 560px; max-width: 100%; background: #fff; }
+    th, td { border: 1px solid #e6e6e6; padding: 8px 10px; font-size: 14px; }
+    th { background: #f7f7f7; text-align: left; }
+    .ok { color: #2e7d32; font-weight: 600; }
+    .warn { color: #c62828; font-weight: 600; }
+    .note { font-size: 12px; color: #666; margin-top: 8px; }
+    a { color: #2c3e50; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>📊 A/B Test Results</h1>
 
-{% if results.error %}
-<p>Error: {{ results.error }}</p>
-{% else %}
-<table>
-    <tr><th>Metric</th><th>Value</th></tr>
-    <tr><td>Group A Avg Rating (CF)</td><td>{{ results.group_a_avg }}</td></tr>
-    <tr><td>Group B Avg Rating (Hybrid)</td><td>{{ results.group_b_avg }}</td></tr>
-    <tr><td>t-statistic</td><td>{{ results.t_stat }}</td></tr>
-    <tr><td>p-value</td><td>{{ results.p_value }}</td></tr>
-    <tr><td>Conclusion</td><td><strong>{{ results.conclusion }}</strong></td></tr>
-</table>
-{% endif %}
+  {% if results.error %}
+    <p class="warn">Error: {{ results.error }}</p>
+  {% else %}
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Group A size (nₐ)</td><td>{{ results.n_a }}</td></tr>
+      <tr><td>Group B size (n_b)</td><td>{{ results.n_b }}</td></tr>
+      <tr><td>Group A Avg Rating (CF)</td><td>{{ results.group_a_avg }}</td></tr>
+      <tr><td>Group B Avg Rating (Hybrid)</td><td>{{ results.group_b_avg }}</td></tr>
+      <tr><td>Mean difference (B − A)</td><td>{{ results.mean_diff }}</td></tr>
+      <tr><td>t-statistic (Welch)</td><td>{{ results.t_stat }}</td></tr>
+      <tr><td>p-value</td><td>{{ results.p_value }}</td></tr>
+      <tr>
+        <td>95% CI (mean diff)</td>
+        <td>
+          {% if results.ci95 %}
+            [{{ results.ci95[0] }}, {{ results.ci95[1] }}]
+          {% else %}
+            N/A
+          {% endif %}
+        </td>
+      </tr>
+      <tr><td>Cohen’s d (effect size)</td><td>{{ results.cohens_d }}</td></tr>
+      <tr>
+        <td>Conclusion</td>
+        <td>
+          {% if results.conclusion == "Significant" %}
+            <span class="ok">{{ results.conclusion }}</span>
+          {% else %}
+            <span class="warn">{{ results.conclusion }}</span>
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+    <p class="note">
+      Assignment uses deterministic MD5 parity for user→variant.
+      “Significant” means p &lt; {{ results.alpha or 0.05 }}.
+    </p>
+  {% endif %}
 
-<br><a href="/">← Back to Home</a>
+  <p style="margin-top: 20px;"><a href="/">← Back to Home</a></p>
+</body>
+</html>

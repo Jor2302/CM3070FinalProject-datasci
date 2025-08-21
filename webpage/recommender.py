@@ -152,3 +152,4 @@ def load_user_profile(user_id, profile_path="data/user_profiles.csv"):
     except Exception as e:
         print("Profile load error:", e)
         return []
+

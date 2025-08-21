@@ -1,61 +1,64 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Course Association Rules</title>
-    <style>
-        body { font-family: Arial; padding: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; }
-        th { background-color: #f2f2f2; }
-        select { padding: 6px; }
-        .explain { font-size: 0.9em; color: #555; margin-top: 10px; }
-    </style>
-</head>
-<body>
-    <h2>📎 Course Association Rule Recommendations</h2>
+<h2>📎 Recommendations based on your selection</h2>
 
-    <form method="POST">
-        <label for="course_id">Select a Course ID:</label>
-        <select name="course_id" id="course_id">
-            {% for cid in course_options %}
-            <option value="{{ cid }}" {% if course_id == cid %}selected{% endif %}>{{ cid }}</option>
-            {% endfor %}
-        </select>
-        <input type="submit" value="Find Associations">
-    </form>
+<form method="POST">
+  <label for="course_id">Select a Course ID:</label>
+  <select name="course_id" id="course_id">
+    {% for cid in course_options %}
+      <option value="{{ cid }}" {% if course_id == cid %}selected{% endif %}>{{ cid }}</option>
+    {% endfor %}
+  </select>
+  <input type="submit" value="Find Associations">
+</form>
 
-    {% if explanations %}
-    <h3>Recommendations for Course ID {{ course_id }}</h3>
-    <table>
+{% if explanations %}
+  <h3>Because you took: {{ selected_title or course_id }}</h3>
+  <table>
+    <tr>
+      <th>Course</th>
+      <th>Estimated likelihood</th>
+      <th>vs typical</th>
+      <th>Why</th>
+    </tr>
+    {% for row in explanations %}
+    <tr>
+      <td>{{ row.title }} <div style="font-size:12px;color:#666;">(ID: {{ row.consequent }})</div></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:120px;height:8px;background:#eee;border-radius:4px;overflow:hidden;">
+            <div style="width: {{ row.likelihood_pct }}%; height:8px; background:#4caf50;"></div>
+          </div>
+          <span>{{ row.likelihood_pct }}% <span style="color:#666;">({{ row.n_both }}/{{ row.n_selected }})</span></span>
+        </div>
+      </td>
+      <td>{{ row.baseline_pct }}%</td>
+      <td>Often taken by learners who also took your selected course.</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <details style="margin-top:10px;">
+    <summary>Show details (support / confidence / lift)</summary>
+    <table style="margin-top:8px;">
+      <tr><th>Course ID</th><th>Support</th><th>Confidence</th><th>Lift</th></tr>
+      {% for row in explanations %}
         <tr>
-            <th>Also Taken Course ID</th>
-            <th>Support</th>
-            <th>Confidence</th>
-            <th>Lift</th>
+          <td>{{ row.consequent }}</td>
+          <td>{{ row.support }}</td>
+          <td>{{ row.confidence }}</td>
+          <td>{{ row.lift }}</td>
         </tr>
-        {% for row in explanations %}
-        <tr>
-            <td>{{ row.consequent }}</td>
-            <td>{{ row.support }}</td>
-            <td>{{ row.confidence }}</td>
-            <td>{{ row.lift }}</td>
-        </tr>
-        {% endfor %}
+      {% endfor %}
     </table>
+  </details>
 
-    <div class="explain">
-        <p><strong>What do these terms mean?</strong></p>
-        <ul>
-            <li><strong>Support</strong>: How often both courses appear together (as % of all users)</li>
-            <li><strong>Confidence</strong>: Among users who took the selected course, how many also took the other one</li>
-            <li><strong>Lift</strong>: How much more likely the other course is taken compared to random chance (Lift > 1 = strong)</li>
-        </ul>
-    </div>
+  <div class="explain" style="font-size:13px;color:#555;margin-top:10px;">
+    <p><strong>What these mean:</strong>
+    <br><em>Estimated likelihood</em>: among learners who took your selected course, the share who also took the recommended course (with sample sizes).
+    <br><em>vs typical</em>: how common the recommended course is among all learners.</p>
+  </div>
 
-    {% elif course_id %}
-        <p>No association rules found for this course.</p>
-    {% endif %}
+{% elif course_id %}
+  <p>No association-based suggestions found for this course.</p>
+{% endif %}
 
-    <br><a href="/">← Back to Home</a>
-</body>
-</html>
+<p style="margin-top: 16px;"><a href="/">← Back to Home</a></p>

@@ -5,3 +5,23 @@ timestamp,user_id,course_id,feedback,rating
 2025-05-31T09:10:00,user_48,663810,Interesting but a bit outdated,3
 2025-05-31T09:20:00,user_52,364716,Amazing! Would recommend to others.,5
 2025-06-01T16:30:04.848078,user_34,8324,very good keep it up,5
+2025-06-01T17:00:01,user_55,658276,Helpful but too short,3
+2025-06-01T17:05:22,user_09,1270254,Great for revision,4
+2025-06-01T17:09:43,user_12,364716,Struggled to follow some sections,2
+2025-06-01T17:15:10,user_81,663810,Well explained and organized,5
+2025-06-01T17:18:30,user_44,8324,Not engaging,2
+2025-06-01T17:22:09,user_22,658276,The quizzes were too hard,2
+2025-06-01T17:30:55,user_17,1270254,Practical examples helped a lot,4
+2025-06-01T17:41:03,user_61,364716,Basic concepts covered well,4
+2025-06-01T17:43:20,user_48,773174,Found some topics confusing,3
+2025-06-01T17:45:12,user_39,663810,Challenging but rewarding,5
+2025-06-01T18:01:08,user_51,8324,Not enough exercises,3
+2025-06-01T18:09:55,user_60,773174,Would recommend to classmates,5
+2025-06-01T18:14:32,user_71,364716,Materials could be improved,2
+2025-06-01T18:17:16,user_02,658276,Very detailed explanations,5
+2025-06-01T18:21:49,user_23,1270254,Too much theory,3
+2025-06-01T18:26:03,user_28,663810,The instructor was fantastic!,5
+2025-06-01T18:30:30,user_74,8324,Wish there were more examples,3
+2025-06-01T18:32:44,user_38,773174,Enjoyed the real-world cases,4
+2025-06-01T18:38:59,user_29,364716,The pace was perfect,5
+2025-06-01T18:44:07,user_95,658276,Slides were hard to read,2
