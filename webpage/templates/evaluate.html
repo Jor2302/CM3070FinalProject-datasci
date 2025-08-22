@@ -39,14 +39,21 @@
 
     <div class="card">
       <h2>🧠 Matrix Factorisation (SVD)</h2>
-      <div class="kpi"><strong>Avg RMSE:</strong> {{ svd.svd_rmse }}</div>
-      <div class="kpi"><strong>Avg MAE:</strong> {{ svd.svd_mae }}</div>
+      <div class="kpi"><strong>Avg RMSE (CV):</strong> {{ svd.svd_rmse }}</div>
+      <div class="kpi"><strong>Avg MAE (CV):</strong> {{ svd.svd_mae }}</div>
     </div>
 
     <div class="card">
-      <h2>📈 Top-N Precision (±SD)</h2>
-      <div class="kpi"><strong>P@5 (Popularity):</strong> {{ baselines.p_at5_popularity }}</div>
-      <div class="kpi"><strong>P@5 (SVD):</strong> {{ baselines.p_at5_svd }}</div>
+      <h2>📈 Top-N Precision/Recall (k=5)</h2>
+      <table>
+        <tr>
+          <th>Model</th><th>Precision@5</th><th>Recall@5</th>
+        </tr>
+        <tr><td>Popularity</td><td>{{ baselines.p_at5_popularity }}</td><td>{{ baselines.r_at5_popularity }}</td></tr>
+        <tr><td>SVD</td><td>{{ baselines.p_at5_svd }}</td><td>{{ baselines.r_at5_svd }}</td></tr>
+        <tr><td>Content</td><td>{{ baselines.p_at5_content }}</td><td>{{ baselines.r_at5_content }}</td></tr>
+        <tr><td><strong>Hybrid</strong></td><td><strong>{{ baselines.p_at5_hybrid }}</strong></td><td><strong>{{ baselines.r_at5_hybrid }}</strong></td></tr>
+      </table>
       {% if baselines.bar_img %}
         <img src="{{ url_for('static', filename='precision_bar.png') }}" alt="Precision bar chart" />
       {% endif %}
@@ -83,18 +90,12 @@
         <table>
           <thead>
             <tr>
-              {% for h in feedback_header %}
-                <th>{{ h }}</th>
-              {% endfor %}
+              {% for h in feedback_header %}<th>{{ h }}</th>{% endfor %}
             </tr>
           </thead>
           <tbody>
             {% for row in feedback_rows[:15] %}
-              <tr>
-                {% for cell in row %}
-                  <td>{{ cell }}</td>
-                {% endfor %}
-              </tr>
+              <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
             {% endfor %}
           </tbody>
         </table>
