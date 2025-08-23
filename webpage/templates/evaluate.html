@@ -4,26 +4,54 @@
   <meta charset="UTF-8" />
   <title>Evaluation Results</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
+    body { font-family: Arial, sans-serif; padding: 20px; background:#fafbfc; color:#1f2d3d; }
     h1, h2 { color: #2c3e50; margin: 0 0 8px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap: 20px; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
-    .kpi { margin: 6px 0; }
-    img { max-width: 100%; height: auto; border-radius: 8px; }
+    .card { border: 1px solid #e6e9ef; border-radius: 12px; padding: 16px; background:#fff; }
+    .kpi { margin: 6px 0; font-size: 15px; }
+    img { max-width: 100%; height: auto; border-radius: 8px; border:1px solid #eee; }
     .btns a { display:inline-block; margin-right:10px; padding:8px 12px; border:1px solid #333; border-radius:8px; text-decoration:none; color:#111; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 14px; }
+    th, td { border: 1px solid #e6e9ef; padding: 6px 8px; font-size: 14px; }
     th { background: #f7f7f7; text-align: left; }
+    .legend { margin: 14px 0 24px; background:#f4f7ff; border:1px solid #dbe5ff; border-radius:10px; padding:12px 14px; }
+    .legend b { color:#1f50b5; }
+    details { margin-top:8px; }
+    details > summary { cursor:pointer; color:#334155; font-weight:600; }
+    .subtle { color:#6b7280; font-size:12px; margin-top:6px; }
+    .pill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; margin-left:6px; background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; }
+    /* simple hover tooltip */
+    .help { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:#eef2ff; color:#374151; font-weight:700; font-size:12px; margin-left:6px; position:relative; cursor:help; }
+    .help::after {
+      content: attr(data-tip);
+      position: absolute; left: 50%; transform: translateX(-50%);
+      bottom: 125%; white-space: nowrap;
+      background: #111827; color:#fff; font-size:12px; padding:6px 8px; border-radius:6px; opacity:0; pointer-events:none;
+      transition:.15s; box-shadow:0 6px 18px rgba(0,0,0,.15);
+    }
+    .help:hover::after { opacity:1; }
   </style>
 </head>
 <body>
   <h1>📊 Evaluation Results</h1>
 
+  <!-- How to read this dashboard -->
+  <div class="legend">
+    <div><b>Quick guide:</b> <span class="pill">Lower is better</span> RMSE/MAE • <span class="pill">Higher is better</span> Precision/Recall/AUC.</div>
+    <div class="subtle">Precision@K = “of the top K we recommended, what fraction were truly relevant?” • Recall@K = “of all relevant items, how many did we include in the top K?”.</div>
+  </div>
+
   <div class="grid">
     <div class="card">
-      <h2>🎯 Main Model</h2>
-      <div class="kpi"><strong>RMSE:</strong> {{ metrics.rmse }}</div>
-      <div class="kpi"><strong>Precision@3:</strong> {{ metrics.precision }}</div>
+      <h2>🎯 Main Model <span class="help" data-tip="Headline sanity-check metrics on all ratings.">?</span></h2>
+      <div class="kpi"><strong>RMSE:</strong> {{ metrics.rmse }} <span class="pill">lower is better</span></div>
+      <div class="kpi"><strong>Precision@3:</strong> {{ metrics.precision }} <span class="pill">higher is better</span></div>
+      <details><summary>How this is calculated</summary>
+        <ul>
+          <li><b>RMSE</b> = √mean((true − predicted)²) over ratings.</li>
+          <li><b>Precision@3</b> = fraction of the top-3 predicted positives that are actually positive (rating ≥ 4).</li>
+        </ul>
+      </details>
       <div class="btns" style="margin-top:10px;">
         {% if files.metrics_csv %}
           <a href="{{ url_for('static', filename='evaluation_metrics.csv') }}" download>Download metrics CSV</a>
@@ -32,19 +60,25 @@
     </div>
 
     <div class="card">
-      <h2>🔁 Cross-Validation (5-Fold)</h2>
+      <h2>🔁 Cross-Validation (5-Fold) <span class="help" data-tip="Train/test split repeated 5 times with different folds.">?</span></h2>
       <div class="kpi"><strong>Mean RMSE:</strong> {{ cv.cv_rmse_mean }}</div>
       <div class="kpi"><strong>Std Dev:</strong> {{ cv.cv_rmse_std }}</div>
+      <details><summary>How this is calculated</summary>
+        <p>We split user–item ratings into 5 folds, train on 4, test on 1, and rotate. We report mean and standard deviation of RMSE.</p>
+      </details>
     </div>
 
     <div class="card">
-      <h2>🧠 Matrix Factorisation (SVD)</h2>
+      <h2>🧠 Matrix Factorisation (SVD) <span class="help" data-tip="Surprise SVD trained/evaluated with CV.">?</span></h2>
       <div class="kpi"><strong>Avg RMSE (CV):</strong> {{ svd.svd_rmse }}</div>
       <div class="kpi"><strong>Avg MAE (CV):</strong> {{ svd.svd_mae }}</div>
+      <details><summary>How this is calculated</summary>
+        <p>We use <b>Surprise SVD</b> to learn latent factors and evaluate with 5-fold CV on the rating prediction task (RMSE/MAE).</p>
+      </details>
     </div>
 
     <div class="card">
-      <h2>📈 Top-N Precision/Recall (k=5)</h2>
+      <h2>📈 Top-N Precision/Recall (k=5) <span class="help" data-tip="Strict: the exact held-out item must appear in the top-5.">?</span></h2>
       <table>
         <tr>
           <th>Model</th><th>Precision@5</th><th>Recall@5</th>
@@ -57,35 +91,54 @@
       {% if baselines.bar_img %}
         <img src="{{ url_for('static', filename='precision_bar.png') }}" alt="Precision bar chart" />
       {% endif %}
+      <details><summary>How this is calculated</summary>
+        <ul>
+          <li>We split each user’s history into <b>train</b> and a tiny <b>test</b> set (ensuring ≥1 positive in test when possible).</li>
+          <li>Each model ranks a candidate pool; we check if the <i>held-out positive</i> is inside the top-5.</li>
+          <li><b>Precision@5</b> = hits ÷ 5, averaged across users with test positives. <b>Recall@5</b> = hits ÷ positives.</li>
+        </ul>
+        {% if baselines.p_at5_popularity == 0 and baselines.p_at5_svd == 0 and baselines.p_at5_content == 0 and baselines.p_at5_hybrid == 0 %}
+          <p class="subtle">Why zeros? With a large catalog, exact hit@5 is strict. Use PR/ROC and Recall@20/50 for a fuller picture.</p>
+        {% endif %}
+      </details>
     </div>
 
     <div class="card">
-      <h2>🔍 Precision-Recall</h2>
-      <div class="kpi"><strong>AUC(PR):</strong> {{ curves.auc_pr }}</div>
+      <h2>🔍 Precision-Recall <span class="help" data-tip="Area under the Precision–Recall curve on held-out pairs.">?</span></h2>
+      <div class="kpi"><strong>AUC(PR):</strong> {{ curves.auc_pr }} <span class="pill">higher is better</span></div>
       {% if curves.pr_img %}
         <img src="{{ url_for('static', filename='pr_curve.png') }}" alt="PR curve" />
       {% else %}
         <p>No PR curve available.</p>
       {% endif %}
+      <details><summary>How this is calculated</summary>
+        <p>We score held-out (user, item) pairs with SVD, sweep a threshold, and plot precision vs recall. AUC close to 1.0 is excellent; ~0.5–0.6 is moderate.</p>
+      </details>
     </div>
 
     <div class="card">
-      <h2>🧪 ROC Curve</h2>
-      <div class="kpi"><strong>AUC(ROC):</strong> {{ curves.auc_roc }}</div>
+      <h2>🧪 ROC Curve <span class="help" data-tip="True-positive vs false-positive trade-off on held-out pairs.">?</span></h2>
+      <div class="kpi"><strong>AUC(ROC):</strong> {{ curves.auc_roc }} <span class="pill">higher is better</span></div>
       {% if curves.roc_img %}
         <img src="{{ url_for('static', filename='roc_curve.png') }}" alt="ROC curve" />
       {% else %}
         <p>No ROC curve available.</p>
       {% endif %}
+      <details><summary>How this is calculated</summary>
+        <p>AUC close to 0.5 ≈ random; closer to 1.0 is better. Computed from SVD scores vs true labels (rating ≥ threshold).</p>
+      </details>
     </div>
 
     <div class="card">
-      <h2>📚 Topic Insights (LDA)</h2>
+      <h2>📚 Topic Insights (LDA) <span class="help" data-tip="Unsupervised topics derived from course text.">?</span></h2>
       <img src="{{ url_for('static', filename='lda_topics.png') }}" alt="Topic summary" />
+      <details><summary>How this is calculated</summary>
+        <p>We run LDA on course titles/subjects to extract latent topics and show the top terms per topic.</p>
+      </details>
     </div>
 
     <div class="card">
-      <h2>📝 Recent Feedback</h2>
+      <h2>📝 Recent Feedback <span class="help" data-tip="What real users said; used for qualitative checks and A/B tests.">?</span></h2>
       {% if feedback_header and feedback_rows %}
         <table>
           <thead>
@@ -99,10 +152,13 @@
             {% endfor %}
           </tbody>
         </table>
-        <p style="font-size:12px;color:#666;margin-top:6px;">Showing first 15 rows from data/user_feedback.csv</p>
+        <p class="subtle">Showing first 15 rows from <code>data/user_feedback.csv</code></p>
       {% else %}
         <p>No feedback captured yet.</p>
       {% endif %}
+      <details><summary>How this is used</summary>
+        <p>We derive sentiment/classification from comments and can re-rank recommendations based on “thumbs up” history.</p>
+      </details>
     </div>
   </div>
 

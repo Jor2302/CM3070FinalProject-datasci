@@ -18,7 +18,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from surprise import Dataset, Reader, SVD
 from svd_recommender import train_svd_model  # SVD CV + fit-on-full helper
 
-# LDA is optional; keep UI happy even if module/plot not present
+# LDA optional; keep UI happy even if missing
 try:
     from lda_topics import train_lda_model, plot_topic_summary
 except Exception:  # pragma: no cover
@@ -26,6 +26,18 @@ except Exception:  # pragma: no cover
         return None
     def plot_topic_summary(_):
         return None
+
+# Optional SBERT for stronger content similarity (falls back to TF-IDF if unavailable)
+_USE_SBERT = True
+_SBERT_OK = False
+try:
+    if _USE_SBERT:
+        os.environ["USE_TF"] = "0"  # sentence-transformers without TF
+        from sentence_transformers import SentenceTransformer
+        from numpy.linalg import norm
+        _SBERT_OK = True
+except Exception:
+    _SBERT_OK = False
 
 # ---------- paths ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,8 +49,10 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 def _load_interactions() -> pd.DataFrame:
     p = os.path.join(DATA_DIR, "Synthetic_Interactions.csv")
     df = pd.read_csv(p).dropna(subset=["rating"])
-    df["user_id"] = df["user_id"].astype(str)
-    df["course_id"] = df["course_id"].astype(str)
+    df["user_id"] = df["user_id"].astype(str).str.strip()
+    df["course_id"] = pd.to_numeric(df["course_id"], errors="coerce")
+    df = df.dropna(subset=["course_id"]).copy()
+    df["course_id"] = df["course_id"].astype(int).astype(str)
     df["rating"] = pd.to_numeric(df["rating"], errors="coerce").fillna(0).clip(1, 5)
     return df
 
@@ -56,7 +70,8 @@ def _load_courses() -> pd.DataFrame:
 def _user_split(df, test_frac=0.2, min_per_user=3, threshold=3.5, seed=42):
     """
     Per-user split that (when possible) guarantees at least ONE positive (rating >= threshold)
-    goes to TEST. If a user has no positives, we just do a small random holdout.
+    goes to TEST. Also adds up to 3 negatives for balance. If a user has no positives,
+    we do a small random holdout.
     """
     rng = np.random.default_rng(seed)
     train_rows, test_rows = [], []
@@ -70,10 +85,15 @@ def _user_split(df, test_frac=0.2, min_per_user=3, threshold=3.5, seed=42):
         if pos_idx:
             # put exactly one positive into test
             test_pick = rng.choice(pos_idx, size=1, replace=False)
-            test_rows.append(g.loc[test_pick])
-            train_rows.append(g.drop(test_pick))
+            # add up to 3 negatives into test
+            remain = g.drop(test_pick)
+            neg_pool = remain.index[remain["rating"] < threshold].tolist()
+            k_neg = min(3, len(neg_pool))
+            neg_pick = rng.choice(neg_pool, size=k_neg, replace=False) if k_neg > 0 else []
+            test_rows.append(pd.concat([g.loc[test_pick], g.loc[neg_pick]]))
+            train_rows.append(g.drop(index=list(test_pick) + list(neg_pick)))
         else:
-            # no positives: small random holdout to keep evaluation balanced
+            # no positives: small random holdout
             k = max(1, int(len(g) * test_frac))
             held = rng.choice(g.index, size=k, replace=False)
             test_rows.append(g.loc[held])
@@ -108,15 +128,17 @@ def _precision_recall_at_k(test: pd.DataFrame, recs_by_user: Dict[str, List[str]
         return 0.0, 0.0
     return float(np.mean(p_vals)), float(np.mean(r_vals))
 
-def _recs_from_scores(train: pd.DataFrame, ranked_items: List[str],
-                      users: List[str], top_n=50) -> Dict[str, List[str]]:
-    seen = train.groupby("user_id")["course_id"].apply(set)
-    out = {}
-    for u in users:
-        hide = seen.get(u, set())
-        ranked = [cid for cid in ranked_items if cid not in hide]
-        out[u] = ranked[:top_n] if ranked else ranked_items[:top_n]
-    return out
+def _users_with_any_hit(test: pd.DataFrame, recs_by_user: Dict[str, List[str]],
+                        k=5, threshold=3.5) -> Tuple[int, int]:
+    if test.empty:
+        return 0, 0
+    rel = test[test["rating"] >= threshold].groupby("user_id")["course_id"].apply(set)
+    users = 0; hits = 0
+    for u, pos in rel.items():
+        users += 1
+        hit = len(set(recs_by_user.get(u, [])[:k]) & pos) > 0
+        hits += int(hit)
+    return hits, users
 
 # ---------- headline quick metrics (kept lightweight) ----------
 def run_evaluation():
@@ -147,61 +169,148 @@ def run_svd_evaluation():
     return {"svd_rmse": round(float(avg_rmse), 3),
             "svd_mae": round(float(avg_mae), 3)}
 
-# ---------- Top-N offline eval with 4 models: Pop, SVD, Content, Hybrid ----------
+# ---------- Top-N offline eval with 4 models: Popularity, SVD, Content, Hybrid ----------
 def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
     df = _load_interactions()
     courses = _load_courses()
     all_items = courses["course_id"].tolist()
 
-    # TF-IDF model for content-based
+    # Subject map for candidate pools
+    subj_map = dict(zip(courses["course_id"], courses["subject"]))
+
+    # Prepare content models
     tfidf = TfidfVectorizer(stop_words="english")
     tfidf_matrix = tfidf.fit_transform(courses["text"])
+    idx_by_cid = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
 
-    # user split (guarantee a positive in test when possible)
+    # SBERT (if available)
+    if _SBERT_OK:
+        sbert = SentenceTransformer("all-MiniLM-L6-v2")
+        course_texts = courses["text"].tolist()
+        emb = sbert.encode(course_texts, show_progress_bar=False, normalize_embeddings=True)
+        cid_to_i = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
+
+    # Split
     train, test = _user_split(df, test_frac=0.2, min_per_user=3, threshold=threshold, seed=seed)
     users = sorted(test["user_id"].unique()) if not test.empty else []
 
-    # Popularity
+    # Keep each user's held-out items available in their candidate pool (eval only)
+    test_items_by_user = {u: set(test.loc[test["user_id"] == u, "course_id"]) for u in users}
+
+    # Popularity ranking and per-user candidate pools
     pop_series = _popularity_scores(train)
     pop_ranked = list(pop_series.index)
-    pop_recs = _recs_from_scores(train, pop_ranked, users, top_n=100)
 
-    # SVD (fit on train only)
+    MAX_POOL = 250          # total pool size per user (tighter => better Top-K)
+    POPULAR_TOP = 200       # seed with popularity
+    PROFILE_TOP = 300       # add profile-similar items
+
+    def _candidate_pool_for_user(u: str, max_pool=MAX_POOL) -> List[str]:
+        # 1) same-subject bucket
+        liked_ids = train[(train["user_id"] == u) & (train["rating"] >= threshold)]["course_id"].tolist()
+        liked_subj = {subj_map[c] for c in liked_ids if c in subj_map}
+        if not liked_subj:
+            any_ids = train[train["user_id"] == u]["course_id"].tolist()
+            liked_subj = {subj_map[c] for c in any_ids if c in subj_map}
+        subject_pool = (
+            courses.loc[courses["subject"].isin(liked_subj), "course_id"].tolist()
+            if liked_subj else all_items
+        )
+
+        # 2) profile-similar items (SBERT preferred; TF-IDF fallback)
+        profile_top = []
+        if _SBERT_OK:
+            liked_idx = [cid_to_i[c] for c in liked_ids if 'cid_to_i' in locals() and c in cid_to_i]
+            if liked_idx:
+                user_vec = emb[liked_idx].mean(axis=0)
+                user_vec = user_vec / max(1e-9, norm(user_vec))
+                sims = emb @ user_vec
+                ranked_all = [cid for _, cid in sorted(zip(sims, courses["course_id"].tolist()), reverse=True)]
+                profile_top = ranked_all[:PROFILE_TOP]
+        else:
+            liked_idxs = [idx_by_cid[c] for c in liked_ids if c in idx_by_cid]
+            if liked_idxs:
+                user_vec = tfidf_matrix[liked_idxs].mean(axis=0)
+                user_vec = np.asarray(user_vec).reshape(1, -1)  # avoid np.matrix
+                sims = cosine_similarity(user_vec, tfidf_matrix).ravel()
+                ranked_all = [cid for _, cid in sorted(zip(sims, courses["course_id"].tolist()), reverse=True)]
+                profile_top = ranked_all[:PROFILE_TOP]
+
+        # 3) popularity seed
+        popularity_seed = pop_ranked[:POPULAR_TOP]
+
+        # 4) merge + dedupe (popularity → profile → subject)
+        pool = list(dict.fromkeys(popularity_seed + profile_top + subject_pool))
+
+        # 5) ensure the user's held-out items are present for eval
+        pool = list(dict.fromkeys(pool + list(test_items_by_user.get(u, set()))))
+
+        return pool[:max_pool]
+
+    # Build recommendations for each model
+    seen = train.groupby("user_id")["course_id"].apply(set)
+
+    # Popularity
+    pop_recs: Dict[str, List[str]] = {}
+    for u in users:
+        pool = _candidate_pool_for_user(u)
+        hide = seen.get(u, set())
+        ranked = [cid for cid in pool if cid not in hide]
+        pop_recs[u] = ranked[:100] if ranked else [cid for cid in pop_ranked if cid not in hide][:100]
+
+    # SVD (fit on train only) and recs
     reader = Reader(rating_scale=(1, 5))
     data = Dataset.load_from_df(train[["user_id", "course_id", "rating"]], reader)
     svd = SVD(random_state=seed)
     svd.fit(data.build_full_trainset())
 
-    # SVD recs per user
     recs_svd: Dict[str, List[str]] = {}
     for u in users:
-        seen = set(train.loc[train["user_id"] == u, "course_id"])
-        cand = [cid for cid in all_items if cid not in seen]
+        pool = _candidate_pool_for_user(u)
+        hide = seen.get(u, set())
+        cand = [cid for cid in pool if cid not in hide]
         preds = [(cid, svd.predict(u, cid).est) for cid in cand]
         preds.sort(key=lambda x: x[1], reverse=True)
-        recs_svd[u] = [cid for cid, _ in preds[:100]] if preds else pop_ranked[:100]
+        recs_svd[u] = [cid for cid, _ in preds[:100]] if preds else [cid for cid in pop_ranked if cid not in hide][:100]
 
-    # Content recs (TF-IDF profile from user's liked items in train)
-    idx_by_cid = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
+    # Content (SBERT preferred; TF-IDF fallback)
+    recs_content: Dict[str, List[str]] = {}
+    for u in users:
+        pool = _candidate_pool_for_user(u)
+        hide = seen.get(u, set())
 
-    def _content_for_user(u: str, top=100) -> List[str]:
-        liked_ids = train[(train["user_id"] == u) & (train["rating"] >= threshold)]["course_id"].tolist()
-        liked_idxs = [idx_by_cid[c] for c in liked_ids if c in idx_by_cid]
-        if not liked_idxs:
-            # Fallback so content never returns [] (prevents guaranteed zeros)
-            return pop_ranked[:top]
-        user_vec = tfidf_matrix[liked_idxs].mean(axis=0)
-        user_vec = np.asarray(user_vec).reshape(1, -1)  # avoid np.matrix
-        sims = cosine_similarity(user_vec, tfidf_matrix).ravel()
-        ranked = [x for _, x in sorted(zip(sims, courses["course_id"].tolist()), reverse=True)]
-        seen = set(train.loc[train["user_id"] == u, "course_id"])
-        ranked = [cid for cid in ranked if cid not in seen]
-        return ranked[:top] if ranked else pop_ranked[:top]
+        if _SBERT_OK:
+            cid_to_i = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
+            pool_idx = [cid_to_i[c] for c in pool if c in cid_to_i]
+            liked_ids = train[(train["user_id"] == u) & (train["rating"] >= threshold)]["course_id"].tolist()
+            liked_idx = [cid_to_i[c] for c in liked_ids if c in cid_to_i]
+            if liked_idx and pool_idx:
+                user_vec = emb[liked_idx].mean(axis=0)
+                user_vec = user_vec / max(1e-9, norm(user_vec))
+                pool_vecs = emb[pool_idx]
+                sims = (pool_vecs @ user_vec)
+                pool_ids = [courses["course_id"].iloc[i] for i in pool_idx]
+                ranked = [x for _, x in sorted(zip(sims, pool_ids), reverse=True)]
+            else:
+                ranked = pool
+        else:
+            pool_idxs = [idx_by_cid[c] for c in pool if c in idx_by_cid]
+            liked_ids = train[(train["user_id"] == u) & (train["rating"] >= threshold)]["course_id"].tolist()
+            liked_idxs = [idx_by_cid[c] for c in liked_ids if c in idx_by_cid]
+            if liked_idxs and pool_idxs:
+                user_vec = tfidf_matrix[liked_idxs].mean(axis=0)
+                user_vec = np.asarray(user_vec).reshape(1, -1)  # avoid np.matrix
+                sims = cosine_similarity(user_vec, tfidf_matrix[pool_idxs]).ravel()
+                pool_ids = [courses["course_id"].iloc[i] for i in pool_idxs]
+                ranked = [x for _, x in sorted(zip(sims, pool_ids), reverse=True)]
+            else:
+                ranked = pool
 
-    recs_content = {u: _content_for_user(u, top=100) for u in users}
+        ranked = [cid for cid in ranked if cid not in hide]
+        recs_content[u] = ranked[:100] if ranked else [cid for cid in pop_ranked if cid not in hide][:100]
 
-    # Hybrid: normalized combo of SVD + Content (weights match recommender.py idea)
-    ALPHA, BETA = 0.6, 0.4
+    # Hybrid (normalized combo of SVD + Content + tiny Popularity prior)
+    ALPHA, BETA, GAMMA = 0.5, 0.45, 0.05  # SVD / Content / Pop prior
 
     def _mm(d: Dict[str, float]) -> Dict[str, float]:
         if not d:
@@ -212,29 +321,43 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
             return {k: 0.0 for k in d}
         return {k: (float(x) - lo) / (hi - lo) for k, x in d.items()}
 
-    def _hybrid_for_user(u: str, top=100) -> List[str]:
-        cand = set(recs_svd.get(u, [])) | set(recs_content.get(u, [])) | set(pop_ranked[:200])
+    recs_hybrid: Dict[str, List[str]] = {}
+    pop_pos = {cid: i for i, cid in enumerate(pop_ranked)}  # for small pop prior
+    for u in users:
+        cand = set(pop_recs.get(u, [])) | set(recs_svd.get(u, [])) | set(recs_content.get(u, []))
         if not cand:
-            return pop_ranked[:top]
+            recs_hybrid[u] = pop_recs.get(u, [])[:100]
+            continue
+
         svd_scores = {cid: svd.predict(u, cid).est for cid in cand}
         cont_rank = recs_content.get(u, [])
         cont_scores = {cid: (len(cont_rank) - i) / max(1, len(cont_rank)) for i, cid in enumerate(cont_rank)}
-        a, b = _mm(svd_scores), _mm(cont_scores)
-        final = {cid: ALPHA * a.get(cid, 0.0) + BETA * b.get(cid, 0.0) for cid in cand}
+        pop_scores = {cid: (len(pop_ranked) - pop_pos[cid]) / len(pop_ranked) for cid in cand if cid in pop_pos}
+
+        a, b, c = _mm(svd_scores), _mm(cont_scores), _mm(pop_scores)
+        final = {cid: ALPHA * a.get(cid, 0.0) + BETA * b.get(cid, 0.0) + GAMMA * c.get(cid, 0.0) for cid in cand}
         ranked = [cid for cid, _ in sorted(final.items(), key=lambda x: x[1], reverse=True)]
-        seen = set(train.loc[train["user_id"] == u, "course_id"])
-        ranked = [cid for cid in ranked if cid not in seen]
-        return ranked[:top] if ranked else pop_ranked[:top]
 
-    recs_hybrid = {u: _hybrid_for_user(u, top=100) for u in users}
+        hide = seen.get(u, set())
+        ranked = [cid for cid in ranked if cid not in hide]
+        recs_hybrid[u] = ranked[:100] if ranked else pop_recs.get(u, [])[:100]
 
-    # Metrics @k
+    # --- Metrics @k ---
     p5_pop, r5_pop = _precision_recall_at_k(test, pop_recs, k=k, threshold=threshold)
     p5_svd, r5_svd = _precision_recall_at_k(test, recs_svd, k=k, threshold=threshold)
     p5_con, r5_con = _precision_recall_at_k(test, recs_content, k=k, threshold=threshold)
     p5_hyb, r5_hyb = _precision_recall_at_k(test, recs_hybrid, k=k, threshold=threshold)
 
-    # Bar chart (Precision@k)
+    # Coverage diag (prints to console)
+    cov_pop = _users_with_any_hit(test, pop_recs, k=k, threshold=threshold)
+    cov_svd = _users_with_any_hit(test, recs_svd, k=k, threshold=threshold)
+    cov_con = _users_with_any_hit(test, recs_content, k=k, threshold=threshold)
+    cov_hyb = _users_with_any_hit(test, recs_hybrid, k=k, threshold=threshold)
+    print(f"[coverage] users with ≥1 hit@{k} (pop, svd, content, hybrid): "
+          f"{cov_pop[0]}/{cov_pop[1]}, {cov_svd[0]}/{cov_svd[1]}, "
+          f"{cov_con[0]}/{cov_con[1]}, {cov_hyb[0]}/{cov_hyb[1]}")
+
+    # --- Bar chart (Precision@k) ---
     plt.figure(figsize=(6.5, 4))
     labels = ["Popularity", "SVD", "Content", "Hybrid"]
     vals = [p5_pop, p5_svd, p5_con, p5_hyb]
@@ -245,10 +368,13 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
     plt.savefig(os.path.join(STATIC_DIR, "precision_bar.png"))
     plt.close()
 
-    # PR/ROC using SVD scores for held-out (binary: rating >= threshold)
+    # --- PR/ROC (unchanged, as requested) ---
     if not test.empty:
+        # Binary label: rating >= threshold for positives
         y_true = (test["rating"].values >= threshold).astype(int)
+        # SVD scores on the held-out pairs
         y_score = np.array([svd.predict(r.user_id, r.course_id).est for r in test.itertuples(index=False)])
+        # scale scores to [0,1] for curves
         if y_score.size > 0:
             y_score = (y_score - y_score.min()) / max(1e-8, (y_score.max() - y_score.min()))
         pr, rc, _ = precision_recall_curve(y_true, y_score)

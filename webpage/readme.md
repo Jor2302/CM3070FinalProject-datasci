@@ -39,8 +39,8 @@ webpage/
 - `udemy_course_data.csv` — columns: `course_id`, `course_title`, `subject`
 - `Synthetic_Interactions.csv` — columns: `user_id`, `course_id`, `rating`
 - `User-Item_Rating_Matrix.csv` — (optional) wide matrix for clustering/analysis
-- `user_feedback.csv` — (optional) appended by the app, used by A/B test and feedback reranking
-- `real_users.csv` — (optional) demo table for `/user_testing`
+- `user_feedback.csv` — appended by the app, used by A/B test and feedback reranking
+- `real_users.csv` — table for `/user_testing`
 
 > Embeddings cache is stored in `webpage/embeddings/` (created automatically).
 
