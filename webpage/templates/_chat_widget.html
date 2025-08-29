@@ -1,0 +1,98 @@
+<!-- templates/_chat_widget.html -->
+<style>
+  .chat-fab{position:fixed;right:16px;bottom:16px;z-index:9999;width:48px;height:48px;border-radius:50%;background:#2563eb;color:#fff;border:0;cursor:pointer;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+  .chat-panel{position:fixed;right:16px;bottom:74px;z-index:9998;width:320px;max-height:60vh;display:none;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;box-shadow:0 12px 28px rgba(0,0,0,.18)}
+  .chat-header{background:#1f2937;color:#fff;padding:8px 10px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .chat-body{padding:8px;max-height:40vh;overflow:auto;font-size:14px;background:#fafafa}
+  .chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid #eee;background:#fff}
+  .chat-input{flex:1;padding:8px;border:1px solid #ccc;border-radius:8px}
+  .chat-msg{margin:6px 0;line-height:1.3}
+  .chat-msg.user .bubble{background:#dbeafe;padding:6px 8px;border-radius:8px;display:inline-block}
+  .chat-msg.bot  .bubble{background:#e5e7eb;padding:6px 8px;border-radius:8px;display:inline-block}
+  .chat-close{background:none;border:0;color:#fff;cursor:pointer;font-size:16px}
+  .chat-links a{color:#2563eb;text-decoration:none}
+</style>
+
+<button class="chat-fab" id="chatFab" title="Ask for course ideas">💬</button>
+
+<div class="chat-panel" id="chatPanel" aria-live="polite">
+  <div class="chat-header">
+    <span>Learning assistant</span>
+    <button class="chat-close" id="chatClose" aria-label="Close chat">✕</button>
+  </div>
+  <div class="chat-body" id="chatBody">
+    <div class="chat-msg bot"><span class="bubble">Tell me what you want to learn. Try “python for data analysis”.</span></div>
+  </div>
+  <form class="chat-form" id="chatForm">
+    <input class="chat-input" id="chatInput" type="text" placeholder="Type and press Enter…" />
+    <button class="chat-send" type="submit" style="display:none">Send</button>
+  </form>
+</div>
+
+<script>
+(function(){
+  const fab   = document.getElementById('chatFab');
+  const panel = document.getElementById('chatPanel');
+  const close = document.getElementById('chatClose');
+  const body  = document.getElementById('chatBody');
+  const form  = document.getElementById('chatForm');
+  const input = document.getElementById('chatInput');
+
+  function toggle(open){ panel.style.display = open ? 'block' : 'none'; }
+  fab.addEventListener('click',()=>{ const open = panel.style.display !== 'block'; toggle(open); if(open) input.focus(); });
+  close.addEventListener('click',()=> toggle(false));
+
+  function addMsg(who, text){
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg ' + who;
+    const b = document.createElement('span');
+    b.className = 'bubble';
+    b.textContent = text;
+    wrap.appendChild(b);
+    body.appendChild(wrap);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function addItems(items){
+    if(!items || !items.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg bot';
+    const b = document.createElement('span');
+    b.className = 'bubble chat-links';
+    b.innerHTML = items.map(it =>
+      `<div style="margin:4px 0">
+         <a href="${it.link || '#'}">${it.title}</a>
+         <span style="color:#6b7280;font-size:12px">${it.subject ? ' · ' + it.subject : ''}</span>
+       </div>`
+    ).join('');
+    wrap.appendChild(b);
+    body.appendChild(wrap);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  async function sendMsg(text){
+    addMsg('user', text);
+    try{
+      const res = await fetch('/chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ message: text, top_k: 3 })
+      });
+      const data = await res.json();
+      addMsg('bot', data.reply || 'Okay.');
+      addItems(data.items || []);
+      if (data.link) addItems([{title:'Open recommendations', subject:'', link:data.link}]);
+    }catch(e){
+      addMsg('bot', 'Sorry, I could not reach the server.');
+    }
+  }
+
+  form.addEventListener('submit',(e)=>{
+    e.preventDefault();
+    const msg = (input.value || '').trim();
+    if(!msg) return;
+    input.value = '';
+    sendMsg(msg);
+  });
+})();
+</script>

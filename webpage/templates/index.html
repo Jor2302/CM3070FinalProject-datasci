@@ -4,36 +4,25 @@
     <meta charset="UTF-8" />
     <title>Educational Recommender System</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 60px 20px;
-            background-color: #f8f9fa;
-        }
-        /* Top-left name/ID badge */
-        .student-badge {
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            background: rgba(0,0,0,0.05);
-            color: #2c3e50;
-            padding: 8px 12px;
-            border-radius: 8px;
-            text-align: left;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-        }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 60px 20px; background-color: #f8f9fa; }
+        .student-badge { position: fixed; top: 12px; left: 12px; background: rgba(0,0,0,0.05); color: #2c3e50; padding: 8px 12px; border-radius: 8px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
         .student-badge .name { font-weight: 700; font-size: 14px; }
         .student-badge .id { font-weight: 500; font-size: 12px; color: #555; }
-
         h1 { margin-bottom: 10px; font-size: 36px; color: #2c3e50; }
         p.description { font-size: 18px; color: #555; margin-bottom: 40px; }
-        .button {
-            display: inline-block; margin: 10px; padding: 14px 24px; font-size: 16px;
-            text-decoration: none; color: white; background-color: #007bff;
-            border: none; border-radius: 10px; transition: background-color 0.3s ease;
-        }
+        .button { display: inline-block; margin: 10px; padding: 14px 24px; font-size: 16px; text-decoration: none; color: white; background-color: #007bff; border: none; border-radius: 10px; transition: background-color 0.3s ease; }
         .button:hover { background-color: #0056b3; }
         h3 { margin-top: 40px; color: #333; }
+        /* chat widget */
+        #miniChatBtn{position:fixed;right:16px;bottom:16px;z-index:9999;width:48px;height:48px;border-radius:50%;background:#2563eb;color:#fff;border:0;cursor:pointer;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+        #miniChat{position:fixed;right:16px;bottom:74px;z-index:9998;width:320px;max-height:60vh;display:none;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;box-shadow:0 12px 28px rgba(0,0,0,.18)}
+        #mcHead{background:#1f2937;color:#fff;padding:8px 10px;font-weight:600}
+        #mcBody{padding:8px;max-height:40vh;overflow:auto;font-size:14px}
+        #mcForm{display:flex;gap:6px;padding:8px;border-top:1px solid #eee}
+        #mcInput{flex:1;padding:8px;border:1px solid #ccc;border-radius:8px}
+        .mc-msg{margin:6px 0;line-height:1.3}
+        .mc-user .bubble{background:#dbeafe;padding:6px 8px;border-radius:8px;display:inline-block}
+        .mc-bot .bubble{background:#e5e7eb;padding:6px 8px;border-radius:8px;display:inline-block}
     </style>
 </head>
 <body>
@@ -56,14 +45,39 @@
     <a href="/ab_test" class="button">🧪 A/B Test</a>
 
     {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div style="background-color:#d4edda; padding:10px; border-radius:5px; margin-top:30px; color:#155724;">
-                {% for message in messages %}
-                    <p>{{ message }}</p>
-                {% endfor %}
-            </div>
-        {% endif %}
+      {% if messages %}
+        <div style="background-color:#d4edda; padding:10px; border-radius:5px; margin-top:30px; color:#155724;">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
     {% endwith %}
 
+    <!-- bottom-right mini chat -->
+    <button id="miniChatBtn" title="Ask for course ideas">💬</button>
+    <div id="miniChat" aria-live="polite">
+      <div id="mcHead">Learning assistant</div>
+      <div id="mcBody">
+        <div class="mc-msg mc-bot"><span class="bubble">Tell me what you want to learn. Try “python for data analysis”.</span></div>
+      </div>
+      <form id="mcForm">
+        <input id="mcInput" type="text" placeholder="Type and hit Enter…" />
+        <button>Send</button>
+      </form>
+    </div>
+
+    <script>
+      const btn=document.getElementById('miniChatBtn');
+      const box=document.getElementById('miniChat');
+      const body=document.getElementById('mcBody');
+      const form=document.getElementById('mcForm');
+      const input=document.getElementById('mcInput');
+
+      btn.addEventListener('click',()=>{box.style.display=box.style.display==='block'?'none':'block'; if(box.style.display==='block') input.focus();});
+      function addMsg(who,text){const wrap=document.createElement('div');wrap.className='mc-msg '+(who==='user'?'mc-user':'mc-bot');const b=document.createElement('span');b.className='bubble';b.textContent=text;wrap.appendChild(b);body.appendChild(wrap);body.scrollTop=body.scrollHeight;}
+      async function sendMsg(text){addMsg('user',text);try{const res=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,top_k:3})});const data=await res.json();addMsg('bot',data.reply||'Okay.');}catch(e){addMsg('bot','Sorry, I could not reach the server.');}}
+      form.addEventListener('submit',e=>{e.preventDefault();const msg=input.value.trim();if(!msg) return;input.value='';sendMsg(msg);});
+    </script>
 </body>
 </html>

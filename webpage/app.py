@@ -11,6 +11,9 @@ from association_rules import explain_rules_for_course
 from classifier import classify_text
 from ab_testing import run_ab_test_real_feedback
 from evaluate import run_full_evaluation_bundle
+from collections import Counter
+from chat_assistant import ChatAssistant
+
 
 import re
 from word2vec_similarity import (
@@ -177,16 +180,36 @@ def ab_test():
     results = run_ab_test_real_feedback(csv_path=csv_path)
     return render_template("ab_test.html", results=results)
 
-
 @app.route("/user_testing")
 def user_testing():
     test_data = []
+    rating_counts = Counter()
+
     if os.path.exists(real_users_csv):
         with open(real_users_csv, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
-            header = next(reader, None)  # not used, but keeps structure
-            test_data = list(reader)
-    return render_template("user_testing.html", test_data=test_data)
+            _header = next(reader, None)  # skip header if present
+            for row in reader:
+                # Expected columns: Timestamp, User ID, Course ID, Feedback, Rating
+                test_data.append(row)
+                if len(row) >= 5 and row[4]:
+                    try:
+                        r = int(float(row[4]))
+                        if 1 <= r <= 5:
+                            rating_counts[r] += 1
+                    except ValueError:
+                        pass
+
+    # Always pass arrays so the template never breaks
+    rating_labels = [1, 2, 3, 4, 5]
+    rating_values = [rating_counts.get(k, 0) for k in rating_labels]
+
+    return render_template(
+        "user_testing.html",
+        test_data=test_data,
+        rating_labels=rating_labels,
+        rating_values=rating_values,
+    )
 
 
 @app.route("/feedback", methods=["GET", "POST"])
@@ -278,6 +301,17 @@ def submit_feedback():
         classification=classification,
     )
     # (Note: no redirect after return — that line was unreachable)
+
+
+CATALOG = os.path.join(os.path.dirname(__file__), "data", "udemy_courses.csv")
+CHAT = ChatAssistant(data_paths=[CATALOG])
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True) or {}
+    msg = (data.get("message") or "").strip()
+    return jsonify(CHAT.reply(msg, top_k=3))
+
 
 
 if __name__ == "__main__":

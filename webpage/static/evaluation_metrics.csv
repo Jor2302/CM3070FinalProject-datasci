@@ -3,8 +3,8 @@ RMSE (headline),0.473
 Precision@3 (headline),0.828
 CV RMSE (mean),0.49
 CV RMSE (std),0.003
-SVD RMSE (CV),0.72
-SVD MAE (CV),0.62
+SVD RMSE (CV),0.724
+SVD MAE (CV),0.623
 P@5 Popularity,0.001
 R@5 Popularity,0.005
 P@5 SVD,0.0

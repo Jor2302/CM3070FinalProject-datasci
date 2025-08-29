@@ -1,39 +1,102 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>User feedback</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { padding: 10px; border: 1px solid #ccc; }
-        th { background-color: #f2f2f2; }
-    </style>
+  <title>User feedback</title>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { padding: 10px; border: 1px solid #ccc; }
+    th { background-color: #f2f2f2; }
+    /* Smaller, responsive chart area */
+    .chart-wrap {
+      width: 420px;         /* shrink width */
+      max-width: 100%;      /* still responsive */
+      height: 240px;        /* chart height */
+      margin: 24px auto;    /* center it */
+    }
+    .muted { color: #666; font-size: 0.95rem; text-align: center; }
+    h2, h3 { margin: 0 0 12px; }
+  </style>
+  <!-- Chart.js UMD build -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <h2>🧪 Real User Testing Simulation</h2>
-    {% if test_data %}
-    <table>
-        <tr>
-            <th>Timestamp</th>
-            <th>User ID</th>
-            <th>Course ID</th>
-            <th>Feedback</th>
-            <th>Rating</th>
-        </tr>
-        {% for row in test_data %}
-        <tr>
-            <td>{{ row[0] }}</td>
-            <td>{{ row[1] }}</td>
-            <td>{{ row[2] }}</td>
-            <td>{{ row[3] }}</td>
-            <td>{{ row[4] }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-        <p>No test data available yet.</p>
-    {% endif %}
-    <br>
-    <a href="/">← Back to Home</a>
+  <h2>🧪 Real User Simulation</h2>
+
+  <!-- Ratings bar chart -->
+  <div class="chart-wrap">
+    <h3>Ratings distribution</h3>
+    <!-- No width/height attributes; Chart.js uses wrapper height -->
+    <canvas id="ratingChart" aria-label="Bar chart of ratings 1–5" role="img"></canvas>
+    <p id="noRatingsMsg" class="muted" style="display:none">No ratings yet.</p>
+  </div>
+
+  {% if test_data %}
+  <table>
+    <tr>
+      <th>Timestamp</th>
+      <th>User ID</th>
+      <th>Course ID</th>
+      <th>Feedback</th>
+      <th>Rating</th>
+    </tr>
+    {% for row in test_data %}
+    <tr>
+      <td>{{ row[0] }}</td>
+      <td>{{ row[1] }}</td>
+      <td>{{ row[2] }}</td>
+      <td>{{ row[3] }}</td>
+      <td>{{ row[4] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>No test data available yet.</p>
+  {% endif %}
+
+  <br />
+  <a href="/">← Back to Home</a>
+
+  <script>
+    // Always present thanks to the route; still set safe defaults
+    const ratingLabels = {{ rating_labels|default([1,2,3,4,5])|tojson }};
+    const ratingValues = {{ rating_values|default([0,0,0,0,0])|tojson }};
+
+    const totalRatings = ratingValues.reduce((a, b) => Number(a) + Number(b), 0);
+    const chartEl = document.getElementById('ratingChart');
+    const msgEl = document.getElementById('noRatingsMsg');
+
+    if (totalRatings === 0) {
+      chartEl.style.display = 'none';
+      msgEl.style.display = 'block';
+    } else {
+      const ctx = chartEl.getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ratingLabels.map(String),
+          datasets: [{
+            label: 'Count',
+            data: ratingValues.map(Number),
+            borderWidth: 1,
+            barThickness: 18  // slimmer bars
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, // uses .chart-wrap height
+          scales: {
+            x: { title: { display: true, text: 'Rating' }, ticks: { font: { size: 11 } } },
+            y: { beginAtZero: true, title: { display: true, text: 'Count' }, ticks: { precision: 0, font: { size: 11 } } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { mode: 'index', intersect: false }
+          }
+        }
+      });
+    }
+  </script>
 </body>
 </html>
