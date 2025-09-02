@@ -38,3 +38,7 @@ timestamp,user_id,course_title,feedback,comment,sentiment,classification
 2025-06-11 11:53:12,user_14,9833,not engaging,2.0,negative,not engaged
 2025-06-11 11:55:45,user_10,93232,very useful,5.0,positive,engaged
 2025-06-11 11:59:27,user_15,8324,too fast,3.0,neutral,not engaged
+2025-09-03 02:40:20,user_01,株式投資に必要なスキルの学習手順を学ぶ,thumbs_up,,neutral,engaged
+2025-09-03 02:40:24,user_01,株式投資に必要なスキルの学習手順を学ぶ,thumbs_up,,neutral,engaged
+2025-09-03 02:40:37,user_01,株式投資に必要なスキルの学習手順を学ぶ,thumbs_up,,neutral,engaged
+2025-09-03 02:40:38,user_01,Legal Accounting,thumbs_up,,neutral,engaged

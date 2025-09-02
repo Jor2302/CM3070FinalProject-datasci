@@ -1,4 +1,16 @@
 # evaluate.py
+# -----------------------------------------------------------------------------
+# Offline evaluation routines for the educational recommender system.
+# Produces:
+#   - quick headline metrics (RMSE, Precision@3)
+#   - k-fold CV RMSE for a noisy baseline
+#   - SVD RMSE/MAE via Surprise
+#   - Top-N offline evaluation for Popularity, SVD, Content, Hybrid
+#   - Precision@K and Recall@K bar chart
+#   - Precision–Recall and ROC curves for SVD on held-out pairs
+# Artifacts are saved in static/ for the Flask app to display.
+# -----------------------------------------------------------------------------
+
 from __future__ import annotations
 
 import os
@@ -6,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use("Agg")  # headless backend for servers and CI
 import matplotlib.pyplot as plt
 
 from typing import Dict, List, Tuple
@@ -18,7 +30,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from surprise import Dataset, Reader, SVD
 from svd_recommender import train_svd_model  # SVD CV + fit-on-full helper
 
-# LDA optional; keep UI happy even if missing
+# LDA optional; keeps routes working even if lda_topics.py is absent
 try:
     from lda_topics import train_lda_model, plot_topic_summary
 except Exception:  # pragma: no cover
@@ -27,12 +39,13 @@ except Exception:  # pragma: no cover
     def plot_topic_summary(_):
         return None
 
-# Optional SBERT for stronger content similarity (falls back to TF-IDF if unavailable)
+# Optional SBERT for stronger content similarity
+# If sentence-transformers is not installed, we fall back to TF-IDF
 _USE_SBERT = True
 _SBERT_OK = False
 try:
     if _USE_SBERT:
-        os.environ["USE_TF"] = "0"  # sentence-transformers without TF
+        os.environ["USE_TF"] = "0"  # sentence-transformers can run without TF
         from sentence_transformers import SentenceTransformer
         from numpy.linalg import norm
         _SBERT_OK = True
@@ -45,8 +58,14 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# ---------- small utils ----------
+
+# ---------- data loaders and utilities ----------
 def _load_interactions() -> pd.DataFrame:
+    """
+    Load user–course interactions and normalize types.
+
+    Returns columns: user_id(str), course_id(str), rating(float clipped to [1,5])
+    """
     p = os.path.join(DATA_DIR, "Synthetic_Interactions.csv")
     df = pd.read_csv(p).dropna(subset=["rating"])
     df["user_id"] = df["user_id"].astype(str).str.strip()
@@ -56,7 +75,17 @@ def _load_interactions() -> pd.DataFrame:
     df["rating"] = pd.to_numeric(df["rating"], errors="coerce").fillna(0).clip(1, 5)
     return df
 
+
 def _load_courses() -> pd.DataFrame:
+    """
+    Load course catalogue with minimal fields used for content models.
+
+    Returns columns:
+      - course_id(str)
+      - course_title(str)
+      - subject(str)
+      - text(str) which is title + subject for TF-IDF or SBERT
+    """
     p = os.path.join(DATA_DIR, "udemy_course_data.csv")
     df = pd.read_csv(p, usecols=["course_id", "course_title", "subject"])
     df["course_id"] = pd.to_numeric(df["course_id"], errors="coerce")
@@ -67,25 +96,33 @@ def _load_courses() -> pd.DataFrame:
     df["text"] = (df["course_title"] + " " + df["subject"]).str.strip()
     return df
 
+
 def _user_split(df, test_frac=0.2, min_per_user=3, threshold=3.5, seed=42):
     """
-    Per-user split that (when possible) guarantees at least ONE positive (rating >= threshold)
-    goes to TEST. Also adds up to 3 negatives for balance. If a user has no positives,
-    we do a small random holdout.
+    Per-user train/test split for Top-N evaluation.
+
+    Goals
+      - Hold out at least one positive (rating >= threshold) per user if possible
+      - Add up to 3 negatives to test for balance
+      - If no positives exist for the user, do a small random holdout
+
+    Returns
+      train_df, test_df with the same columns as input df
     """
     rng = np.random.default_rng(seed)
     train_rows, test_rows = [], []
     for uid, g in df.groupby("user_id"):
-        g = g.sample(frac=1.0, random_state=seed)  # shuffle per user
+        # deterministic shuffle per user
+        g = g.sample(frac=1.0, random_state=seed)
         if len(g) < min_per_user:
             train_rows.append(g)
             continue
 
         pos_idx = g.index[g["rating"] >= threshold].tolist()
         if pos_idx:
-            # put exactly one positive into test
+            # exactly one positive into test
             test_pick = rng.choice(pos_idx, size=1, replace=False)
-            # add up to 3 negatives into test
+            # add up to 3 negatives
             remain = g.drop(test_pick)
             neg_pool = remain.index[remain["rating"] < threshold].tolist()
             k_neg = min(3, len(neg_pool))
@@ -103,14 +140,22 @@ def _user_split(df, test_frac=0.2, min_per_user=3, threshold=3.5, seed=42):
     test = pd.concat(test_rows, ignore_index=True) if test_rows else pd.DataFrame(columns=df.columns)
     return train, test
 
+
 def _popularity_scores(train: pd.DataFrame) -> pd.Series:
+    """
+    Score items by mean rating with a tiny count tiebreaker for stable ordering.
+    Returns a descending series indexed by course_id.
+    """
     means = train.groupby("course_id")["rating"].mean()
     counts = train.groupby("course_id")["rating"].count()
-    # tiny count term to break ties reproducibly
     return (means + 1e-6 * counts).sort_values(ascending=False)
+
 
 def _precision_recall_at_k(test: pd.DataFrame, recs_by_user: Dict[str, List[str]],
                            k=5, threshold=3.5) -> Tuple[float, float]:
+    """
+    Compute mean Precision@K and Recall@K over users with at least one positive in test.
+    """
     if test.empty:
         return 0.0, 0.0
     rel = test[test["rating"] >= threshold].groupby("user_id")["course_id"].apply(set)
@@ -128,31 +173,49 @@ def _precision_recall_at_k(test: pd.DataFrame, recs_by_user: Dict[str, List[str]
         return 0.0, 0.0
     return float(np.mean(p_vals)), float(np.mean(r_vals))
 
+
 def _users_with_any_hit(test: pd.DataFrame, recs_by_user: Dict[str, List[str]],
                         k=5, threshold=3.5) -> Tuple[int, int]:
+    """
+    Diagnostic: count how many users have at least one hit in top-K compared to
+    how many users have any positive in test.
+    """
     if test.empty:
         return 0, 0
     rel = test[test["rating"] >= threshold].groupby("user_id")["course_id"].apply(set)
-    users = 0; hits = 0
+    users = 0
+    hits = 0
     for u, pos in rel.items():
         users += 1
         hit = len(set(recs_by_user.get(u, [])[:k]) & pos) > 0
         hits += int(hit)
     return hits, users
 
+
 # ---------- headline quick metrics (kept lightweight) ----------
 def run_evaluation():
+    """
+    Produce quick headline numbers for the dashboard:
+      - RMSE from a noisy baseline predictor
+      - Precision@3 from the same baseline
+    """
     df = _load_interactions()
-    # simple noisy predictor just for a headline RMSE + P@3
+    # add Gaussian noise to rating as a silly baseline predictor
     pred = df["rating"] + np.random.default_rng(42).normal(0, 0.5, size=len(df))
     pred = np.clip(pred, 1.0, 5.0)
     rmse = float(np.sqrt(mean_squared_error(df["rating"], pred)))
+
+    # turn ratings into top vs not-top at threshold 4 to approximate relevance
     is_top = (df["rating"] >= 4).astype(int)
     pred_top = (pred >= 4).astype(int)
     precision_at3 = float((is_top & pred_top).sum() / max(1, pred_top.sum()))
     return {"rmse": round(rmse, 3), "precision": round(precision_at3, 3)}
 
+
 def run_cross_validation(k=5):
+    """
+    K-fold CV of the same noisy baseline to provide a reference RMSE distribution.
+    """
     df = _load_interactions()
     kf = KFold(n_splits=k, shuffle=True, random_state=42)
     rmses = []
@@ -164,18 +227,35 @@ def run_cross_validation(k=5):
     return {"cv_rmse_mean": round(float(np.mean(rmses)), 3),
             "cv_rmse_std": round(float(np.std(rmses)), 3)}
 
+
 def run_svd_evaluation():
+    """
+    Delegate to train_svd_model helper which performs CV and fit-on-full.
+    Returns averaged RMSE and MAE for SVD.
+    """
     _, avg_rmse, avg_mae = train_svd_model(os.path.join(DATA_DIR, "Synthetic_Interactions.csv"))
     return {"svd_rmse": round(float(avg_rmse), 3),
             "svd_mae": round(float(avg_mae), 3)}
 
+
 # ---------- Top-N offline eval with 4 models: Popularity, SVD, Content, Hybrid ----------
 def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
+    """
+    Full Top-N evaluation:
+      1) Split per user while keeping at least one positive in test if possible
+      2) Build candidate pools per user and four recommenders:
+         - Popularity
+         - SVD (Surprise)
+         - Content (SBERT or TF-IDF)
+         - Hybrid blend (SVD + Content + small Popularity prior)
+      3) Compute Precision@K and Recall@K
+      4) Save a precision bar chart, PR and ROC curves for SVD
+    """
     df = _load_interactions()
     courses = _load_courses()
     all_items = courses["course_id"].tolist()
 
-    # Subject map for candidate pools
+    # subject lookup supports candidate pools by subject
     subj_map = dict(zip(courses["course_id"], courses["subject"]))
 
     # Prepare content models
@@ -183,30 +263,38 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
     tfidf_matrix = tfidf.fit_transform(courses["text"])
     idx_by_cid = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
 
-    # SBERT (if available)
+    # SBERT embeddings if available
     if _SBERT_OK:
         sbert = SentenceTransformer("all-MiniLM-L6-v2")
         course_texts = courses["text"].tolist()
         emb = sbert.encode(course_texts, show_progress_bar=False, normalize_embeddings=True)
         cid_to_i = {cid: i for i, cid in enumerate(courses["course_id"].tolist())}
 
-    # Split
+    # Train/test split per user
     train, test = _user_split(df, test_frac=0.2, min_per_user=3, threshold=threshold, seed=seed)
     users = sorted(test["user_id"].unique()) if not test.empty else []
 
-    # Keep each user's held-out items available in their candidate pool (eval only)
+    # Ensure the held-out test items are in each user's candidate pool for proper evaluation
     test_items_by_user = {u: set(test.loc[test["user_id"] == u, "course_id"]) for u in users}
 
-    # Popularity ranking and per-user candidate pools
+    # Popularity ranking over the train split
     pop_series = _popularity_scores(train)
     pop_ranked = list(pop_series.index)
 
-    MAX_POOL = 250          # total pool size per user (tighter => better Top-K)
-    POPULAR_TOP = 200       # seed with popularity
-    PROFILE_TOP = 300       # add profile-similar items
+    # Candidate pool sizes
+    MAX_POOL = 250        # final per-user pool cap
+    POPULAR_TOP = 200     # popularity seed size
+    PROFILE_TOP = 300     # profile similarity addition
 
     def _candidate_pool_for_user(u: str, max_pool=MAX_POOL) -> List[str]:
-        # 1) same-subject bucket
+        """
+        Build a reasonable per-user candidate pool:
+          1) same-subject courses
+          2) profile-similar items by SBERT or TF-IDF user vector
+          3) popularity seed
+          4) always include user's held-out test items
+        """
+        # subjects from user's liked items if available, else any subject they interacted with
         liked_ids = train[(train["user_id"] == u) & (train["rating"] >= threshold)]["course_id"].tolist()
         liked_subj = {subj_map[c] for c in liked_ids if c in subj_map}
         if not liked_subj:
@@ -217,7 +305,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
             if liked_subj else all_items
         )
 
-        # 2) profile-similar items (SBERT preferred; TF-IDF fallback)
+        # profile similarity vector
         profile_top = []
         if _SBERT_OK:
             liked_idx = [cid_to_i[c] for c in liked_ids if 'cid_to_i' in locals() and c in cid_to_i]
@@ -236,13 +324,13 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
                 ranked_all = [cid for _, cid in sorted(zip(sims, courses["course_id"].tolist()), reverse=True)]
                 profile_top = ranked_all[:PROFILE_TOP]
 
-        # 3) popularity seed
+        # popularity seed
         popularity_seed = pop_ranked[:POPULAR_TOP]
 
-        # 4) merge + dedupe (popularity → profile → subject)
+        # merge and dedupe while preserving order
         pool = list(dict.fromkeys(popularity_seed + profile_top + subject_pool))
 
-        # 5) ensure the user's held-out items are present for eval
+        # guarantee presence of held-out items for fair evaluation
         pool = list(dict.fromkeys(pool + list(test_items_by_user.get(u, set()))))
 
         return pool[:max_pool]
@@ -250,7 +338,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
     # Build recommendations for each model
     seen = train.groupby("user_id")["course_id"].apply(set)
 
-    # Popularity
+    # Popularity recommender
     pop_recs: Dict[str, List[str]] = {}
     for u in users:
         pool = _candidate_pool_for_user(u)
@@ -258,7 +346,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         ranked = [cid for cid in pool if cid not in hide]
         pop_recs[u] = ranked[:100] if ranked else [cid for cid in pop_ranked if cid not in hide][:100]
 
-    # SVD (fit on train only) and recs
+    # SVD recommender fit on the train split only
     reader = Reader(rating_scale=(1, 5))
     data = Dataset.load_from_df(train[["user_id", "course_id", "rating"]], reader)
     svd = SVD(random_state=seed)
@@ -273,7 +361,8 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         preds.sort(key=lambda x: x[1], reverse=True)
         recs_svd[u] = [cid for cid, _ in preds[:100]] if preds else [cid for cid in pop_ranked if cid not in hide][:100]
 
-    # Content (SBERT preferred; TF-IDF fallback)
+    # Content recommender
+    # SBERT cosine similarity if available, fallback to TF-IDF cosine similarity
     recs_content: Dict[str, List[str]] = {}
     for u in users:
         pool = _candidate_pool_for_user(u)
@@ -309,46 +398,56 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         ranked = [cid for cid in ranked if cid not in hide]
         recs_content[u] = ranked[:100] if ranked else [cid for cid in pop_ranked if cid not in hide][:100]
 
-    # Hybrid (normalized combo of SVD + Content + tiny Popularity prior)
-    ALPHA, BETA, GAMMA = 0.5, 0.45, 0.05  # SVD / Content / Pop prior
+    # Hybrid recommender: normalized blend of SVD + Content + small Popularity prior
+    ALPHA, BETA, GAMMA = 0.5, 0.45, 0.05  # weights
 
     def _mm(d: Dict[str, float]) -> Dict[str, float]:
+        """
+        Min–max normalize a dict of scores to [0,1] per user.
+        If all values equal, return zeros to avoid divide-by-zero.
+        """
         if not d:
             return {}
         v = np.array(list(d.values()), dtype=float)
         lo, hi = float(np.min(v)), float(np.max(v))
-        if hi <= lo:  # constant
+        if hi <= lo:
             return {k: 0.0 for k in d}
         return {k: (float(x) - lo) / (hi - lo) for k, x in d.items()}
 
     recs_hybrid: Dict[str, List[str]] = {}
-    pop_pos = {cid: i for i, cid in enumerate(pop_ranked)}  # for small pop prior
+    pop_pos = {cid: i for i, cid in enumerate(pop_ranked)}  # smaller index = more popular
     for u in users:
+        # candidate set is the union of other recommenders for this user
         cand = set(pop_recs.get(u, [])) | set(recs_svd.get(u, [])) | set(recs_content.get(u, []))
         if not cand:
             recs_hybrid[u] = pop_recs.get(u, [])[:100]
             continue
 
+        # raw scores
         svd_scores = {cid: svd.predict(u, cid).est for cid in cand}
         cont_rank = recs_content.get(u, [])
+        # convert content rank to a score in [0,1] by position
         cont_scores = {cid: (len(cont_rank) - i) / max(1, len(cont_rank)) for i, cid in enumerate(cont_rank)}
+        # small popularity prior by inverse rank
         pop_scores = {cid: (len(pop_ranked) - pop_pos[cid]) / len(pop_ranked) for cid in cand if cid in pop_pos}
 
+        # normalize each component then blend
         a, b, c = _mm(svd_scores), _mm(cont_scores), _mm(pop_scores)
         final = {cid: ALPHA * a.get(cid, 0.0) + BETA * b.get(cid, 0.0) + GAMMA * c.get(cid, 0.0) for cid in cand}
         ranked = [cid for cid, _ in sorted(final.items(), key=lambda x: x[1], reverse=True)]
 
+        # hide items already seen in train
         hide = seen.get(u, set())
         ranked = [cid for cid in ranked if cid not in hide]
         recs_hybrid[u] = ranked[:100] if ranked else pop_recs.get(u, [])[:100]
 
-    # --- Metrics @k ---
+    # --- Metrics @k across all models ---
     p5_pop, r5_pop = _precision_recall_at_k(test, pop_recs, k=k, threshold=threshold)
     p5_svd, r5_svd = _precision_recall_at_k(test, recs_svd, k=k, threshold=threshold)
     p5_con, r5_con = _precision_recall_at_k(test, recs_content, k=k, threshold=threshold)
     p5_hyb, r5_hyb = _precision_recall_at_k(test, recs_hybrid, k=k, threshold=threshold)
 
-    # Coverage diag (prints to console)
+    # Diagnostics to console: how many users get at least one hit in top-K
     cov_pop = _users_with_any_hit(test, pop_recs, k=k, threshold=threshold)
     cov_svd = _users_with_any_hit(test, recs_svd, k=k, threshold=threshold)
     cov_con = _users_with_any_hit(test, recs_content, k=k, threshold=threshold)
@@ -357,7 +456,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
           f"{cov_pop[0]}/{cov_pop[1]}, {cov_svd[0]}/{cov_svd[1]}, "
           f"{cov_con[0]}/{cov_con[1]}, {cov_hyb[0]}/{cov_hyb[1]}")
 
-    # --- Bar chart (Precision@k) ---
+    # --- Bar chart for Precision@K ---
     plt.figure(figsize=(6.5, 4))
     labels = ["Popularity", "SVD", "Content", "Hybrid"]
     vals = [p5_pop, p5_svd, p5_con, p5_hyb]
@@ -368,13 +467,13 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
     plt.savefig(os.path.join(STATIC_DIR, "precision_bar.png"))
     plt.close()
 
-    # --- PR/ROC (unchanged, as requested) ---
+    # --- PR and ROC curves for SVD on the held-out test pairs ---
     if not test.empty:
-        # Binary label: rating >= threshold for positives
+        # Binary relevance by rating threshold
         y_true = (test["rating"].values >= threshold).astype(int)
-        # SVD scores on the held-out pairs
+        # SVD scores on test pairs
         y_score = np.array([svd.predict(r.user_id, r.course_id).est for r in test.itertuples(index=False)])
-        # scale scores to [0,1] for curves
+        # scale to [0,1] for nicer curves
         if y_score.size > 0:
             y_score = (y_score - y_score.min()) / max(1e-8, (y_score.max() - y_score.min()))
         pr, rc, _ = precision_recall_curve(y_true, y_score)
@@ -382,7 +481,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         auc_pr = auc(rc, pr)
         auc_roc = auc(fpr, tpr)
 
-        # PR
+        # PR curve
         plt.figure(figsize=(5, 4))
         plt.plot(rc, pr)
         plt.xlabel("Recall"); plt.ylabel("Precision")
@@ -391,10 +490,10 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         plt.savefig(os.path.join(STATIC_DIR, "pr_curve.png"))
         plt.close()
 
-        # ROC
+        # ROC curve
         plt.figure(figsize=(5, 4))
         plt.plot(fpr, tpr)
-        plt.plot([0, 1], [0, 1], "--")
+        plt.plot([0, 1], [0, 1], "--")  # random baseline
         plt.xlabel("FPR"); plt.ylabel("TPR")
         plt.title(f"ROC (AUC={auc_roc:.3f})")
         plt.tight_layout()
@@ -404,7 +503,7 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         auc_pr = 0.0
         auc_roc = 0.0
 
-    # optional console diag
+    # Console diagnostics
     users_with_pos = int(test[test["rating"] >= threshold]["user_id"].nunique())
     print(f"[evaluate] users in test={len(users)}; users with ≥{threshold} positives={users_with_pos}")
 
@@ -424,7 +523,12 @@ def run_precision_bars_and_curves(k=5, threshold=3.5, seed=42):
         "roc_img": "roc_curve.png" if os.path.exists(os.path.join(STATIC_DIR, "roc_curve.png")) else "",
     }
 
+
 def generate_topic_insights():
+    """
+    Optional LDA topic training and a summary plot saved to static/lda_topics.png.
+    Silently no-ops if LDA is unavailable.
+    """
     try:
         topics = train_lda_model()
         plot_topic_summary(topics)  # saves static/lda_topics.png
@@ -432,7 +536,12 @@ def generate_topic_insights():
         pass
     return {"ok": True}
 
+
 def export_metrics_csv(metrics, cv, svd, models):
+    """
+    Export the main scalar metrics to static/evaluation_metrics.csv
+    for easy inclusion in the report and dashboard tables.
+    """
     rows = [
         {"metric": "RMSE (headline)", "value": metrics["rmse"]},
         {"metric": "Precision@3 (headline)", "value": metrics["precision"]},
@@ -455,7 +564,14 @@ def export_metrics_csv(metrics, cv, svd, models):
     pd.DataFrame(rows).to_csv(out, index=False)
     return {"metrics_csv": out}
 
+
 def run_full_evaluation_bundle():
+    """
+    Convenience wrapper used by the Flask route:
+      - runs all evaluations
+      - generates charts and CSV
+      - returns paths and numbers for easy templating
+    """
     metrics = run_evaluation()
     cv = run_cross_validation(k=5)
     svd = run_svd_evaluation()

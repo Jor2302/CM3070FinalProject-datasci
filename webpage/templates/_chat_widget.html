@@ -1,28 +1,61 @@
 <!-- templates/_chat_widget.html -->
+<!-- Floating mini chat widget for quick course suggestions -->
+
 <style>
-  .chat-fab{position:fixed;right:16px;bottom:16px;z-index:9999;width:48px;height:48px;border-radius:50%;background:#2563eb;color:#fff;border:0;cursor:pointer;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.15)}
-  .chat-panel{position:fixed;right:16px;bottom:74px;z-index:9998;width:320px;max-height:60vh;display:none;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;box-shadow:0 12px 28px rgba(0,0,0,.18)}
-  .chat-header{background:#1f2937;color:#fff;padding:8px 10px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  /* Floating action button (FAB) */
+  .chat-fab{
+    position:fixed;right:16px;bottom:16px;z-index:9999;
+    width:48px;height:48px;border-radius:50%;
+    background:#2563eb;color:#fff;border:0;cursor:pointer;font-size:20px;
+    box-shadow:0 6px 18px rgba(0,0,0,.15)
+  }
+
+  /* Panel container */
+  .chat-panel{
+    position:fixed;right:16px;bottom:74px;z-index:9998;
+    width:320px;max-height:60vh;display:none;
+    background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    box-shadow:0 12px 28px rgba(0,0,0,.18)
+  }
+
+  /* Header: title + close button */
+  .chat-header{
+    background:#1f2937;color:#fff;padding:8px 10px;font-weight:600;
+    display:flex;justify-content:space-between;align-items:center
+  }
+  .chat-close{background:none;border:0;color:#fff;cursor:pointer;font-size:16px}
+
+  /* Scrollable message area */
   .chat-body{padding:8px;max-height:40vh;overflow:auto;font-size:14px;background:#fafafa}
+
+  /* Input row */
   .chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid #eee;background:#fff}
   .chat-input{flex:1;padding:8px;border:1px solid #ccc;border-radius:8px}
+
+  /* Bubbles */
   .chat-msg{margin:6px 0;line-height:1.3}
   .chat-msg.user .bubble{background:#dbeafe;padding:6px 8px;border-radius:8px;display:inline-block}
   .chat-msg.bot  .bubble{background:#e5e7eb;padding:6px 8px;border-radius:8px;display:inline-block}
-  .chat-close{background:none;border:0;color:#fff;cursor:pointer;font-size:16px}
+
+  /* Links inside bot bubble */
   .chat-links a{color:#2563eb;text-decoration:none}
 </style>
 
+<!-- FAB -->
 <button class="chat-fab" id="chatFab" title="Ask for course ideas">💬</button>
 
+<!-- Panel (aria-live announces new messages) -->
 <div class="chat-panel" id="chatPanel" aria-live="polite">
   <div class="chat-header">
     <span>Learning assistant</span>
     <button class="chat-close" id="chatClose" aria-label="Close chat">✕</button>
   </div>
+
   <div class="chat-body" id="chatBody">
     <div class="chat-msg bot"><span class="bubble">Tell me what you want to learn. Try “python for data analysis”.</span></div>
   </div>
+
   <form class="chat-form" id="chatForm">
     <input class="chat-input" id="chatInput" type="text" placeholder="Type and press Enter…" />
     <button class="chat-send" type="submit" style="display:none">Send</button>
@@ -53,6 +86,11 @@
     body.scrollTop = body.scrollHeight;
   }
 
+  // Safe HTML escape (use for link/title/subject if any field can be untrusted)
+  const esc = s => String(s||'').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+
   function addItems(items){
     if(!items || !items.length) return;
     const wrap = document.createElement('div');
@@ -61,8 +99,8 @@
     b.className = 'bubble chat-links';
     b.innerHTML = items.map(it =>
       `<div style="margin:4px 0">
-         <a href="${it.link || '#'}">${it.title}</a>
-         <span style="color:#6b7280;font-size:12px">${it.subject ? ' · ' + it.subject : ''}</span>
+         <a href="${esc(it.link || '#')}">${esc(it.title)}</a>
+         <span style="color:#6b7280;font-size:12px">${it.subject ? ' · ' + esc(it.subject) : ''}</span>
        </div>`
     ).join('');
     wrap.appendChild(b);

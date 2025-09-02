@@ -1,8 +1,9 @@
 import os
 import csv
 from datetime import datetime
+from collections import Counter
 
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 import pandas as pd
 
 from recommender import get_recommendations
@@ -11,11 +12,7 @@ from association_rules import explain_rules_for_course
 from classifier import classify_text
 from ab_testing import run_ab_test_real_feedback
 from evaluate import run_full_evaluation_bundle
-from collections import Counter
 from chat_assistant import ChatAssistant
-
-
-import re
 from word2vec_similarity import (
     get_similar_courses,
     get_title_samples,
@@ -24,17 +21,36 @@ from word2vec_similarity import (
 
 app = Flask(__name__)
 
-# Base directory for robust paths (works no matter where you run from)
+# --- define BASE_DIR ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
-# File locations
-feedback_file = os.path.join(BASE_DIR, "data", "user_feedback.csv")
-user_profiles_file = os.path.join(BASE_DIR, "data", "user_profiles.csv")
-courses_csv = os.path.join(BASE_DIR, "data", "udemy_course_data.csv")
-real_users_csv = os.path.join(BASE_DIR, "data", "real_users.csv")
+# --- file locations ---
+feedback_file       = os.path.join(DATA_DIR, "user_feedback.csv")
+user_profiles_file  = os.path.join(DATA_DIR, "user_profiles.csv")
+courses_csv         = os.path.join(DATA_DIR, "udemy_course_data.csv")  # has course_title
+real_users_csv      = os.path.join(DATA_DIR, "real_users.csv")
 
-# Optional: enable if you use flash/session
-# app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-key-change-me")
+# --- chat assistant ---
+CATALOGS = [
+    os.path.join(DATA_DIR, "udemy_courses.csv"),      # title, subject
+    os.path.join(DATA_DIR, "courses.csv"),            # title, subject
+    os.path.join(DATA_DIR, "udemy_course_data.csv"),  # course_title, subject (mapped in ChatAssistant)
+]
+CHAT = ChatAssistant(data_paths=CATALOGS)
+
+# --- minimal /chat endpoint (always returns JSON 200) ---
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True) or {}
+    msg = (data.get("message") or "").strip()
+    top_k = int(data.get("top_k") or 3)
+    try:
+        res = CHAT.reply(msg, top_k=top_k)
+    except Exception as e:
+        # never leak a 500 to the widget
+        res = {"reply": f"Chat is not ready: {e}"}
+    return jsonify(res), 200
 
 
 @app.route("/")
@@ -301,17 +317,6 @@ def submit_feedback():
         classification=classification,
     )
     # (Note: no redirect after return — that line was unreachable)
-
-
-CATALOG = os.path.join(os.path.dirname(__file__), "data", "udemy_courses.csv")
-CHAT = ChatAssistant(data_paths=[CATALOG])
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    data = request.get_json(silent=True) or {}
-    msg = (data.get("message") or "").strip()
-    return jsonify(CHAT.reply(msg, top_k=3))
-
 
 
 if __name__ == "__main__":

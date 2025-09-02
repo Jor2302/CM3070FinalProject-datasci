@@ -1,36 +1,48 @@
-# webpage/chat_assistant.py
-import os, re, pandas as pd
+# -----------------------------------------------------------------------------
+# Minimal keyword→course helper for the floating chat widget.
+# - Loads a course catalogue CSV (several possible paths)
+# - Builds a TF-IDF index over title + subject
+# - Given a free-text query, returns the top-k matching courses
+# - Handles greetings and a tiny "user 123" deep-link intent
+# -----------------------------------------------------------------------------
+
+import os
+import re
+import pandas as pd
 from typing import List, Dict, Any, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
+
 class ChatAssistant:
     """Free-text → top-k matching courses by TF-IDF on title+subject."""
+
     def __init__(self, data_paths: Optional[List[str]] = None):
         self.data_paths = data_paths or [
             os.path.join("webpage", "data", "udemy_courses.csv"),
             os.path.join("webpage", "data", "courses.csv"),
             os.path.join("data", "udemy_courses.csv"),
             os.path.join("data", "courses.csv"),
+            os.path.join("data", "udemy_course_data.csv"),  # accepts course_title -> title
         ]
         self.enabled = True
         self.df = self._load_courses()
 
         if self.df.empty:
             self.enabled = False
-            self._why_disabled = "No course catalogue CSV found. Expected: course_id, title, subject."
+            self._why_disabled = "No course catalogue CSV found. Expected: course_id, title/course_title, subject."
             self.vectorizer = None
             self.tfidf = None
             return
 
-        # ensure required columns and clean
+        # clean text fields
         self.df["title"] = self.df["title"].fillna("").astype(str)
         if "subject" not in self.df.columns:
             self.df["subject"] = ""
         self.df["subject"] = self.df["subject"].fillna("").astype(str)
         self.df["__text__"] = (self.df["title"] + " " + self.df["subject"]).str.strip()
 
-        # drop rows with no text
+        # drop empty rows
         self.df = self.df[self.df["__text__"].str.len() > 0].reset_index(drop=True)
         if self.df.empty:
             self.enabled = False
@@ -39,25 +51,45 @@ class ChatAssistant:
             self.tfidf = None
             return
 
-        # Keep it simple and robust: no stopwords (avoids empty vocab with short titles)
+        # robust vectorizer (no stopwords so short titles survive)
         self.vectorizer = TfidfVectorizer(min_df=1, ngram_range=(1, 2), stop_words=None)
         self.tfidf = self.vectorizer.fit_transform(self.df["__text__"].tolist())
 
     def _load_courses(self) -> pd.DataFrame:
+        """
+        Try several known paths for a catalogue CSV and normalize schema:
+        - Accepts `course_id` or common aliases (id, courseID, courseId)
+        - Accepts `title` or `course_title` (mapped to title)
+        - Ensures `subject` exists (empty string if missing)
+        Returns only: course_id, title, subject
+        """
         for p in self.data_paths:
             if os.path.exists(p):
                 try:
                     df = pd.read_csv(p)
+
+                    # normalize id -> course_id
                     if "course_id" not in df.columns:
                         for alt in ["id", "courseID", "courseId"]:
                             if alt in df.columns:
                                 df = df.rename(columns={alt: "course_id"})
                                 break
+
+                    # normalize title (accept course_title)
                     if "title" not in df.columns:
-                        continue
+                        if "course_title" in df.columns:
+                            df = df.rename(columns={"course_title": "title"})
+                        else:
+                            continue  # no usable title field
+
                     if "subject" not in df.columns:
                         df["subject"] = ""
-                    return df[["course_id", "title", "subject"]].dropna(subset=["title"])
+
+                    # minimal view
+                    keep = df[["course_id", "title", "subject"]].dropna(subset=["title"])
+                    # enforce str IDs (avoid 1.0 etc.)
+                    keep["course_id"] = keep["course_id"].astype(str)
+                    return keep
                 except Exception:
                     continue
         return pd.DataFrame()
@@ -91,14 +123,15 @@ class ChatAssistant:
             user_id = m.group(1)
             return {"reply": f"Opening recommendations for user {user_id}.", "link": f"/recommend?user_id={user_id}"}
 
-        # keyword search
         q = self.vectorizer.transform([msg])
         sims = linear_kernel(q, self.tfidf).ravel()
+
         if sims.max(initial=0) <= 0:
             return {"reply": "I didn’t find a close match. Try different keywords or add 'beginner/advanced'."}
 
-        k = max(1, min(int(top_k or 3), 10))  # cap to 10
+        k = max(1, min(int(top_k or 3), 10))
         top_idx = sims.argsort()[::-1][:k]
+
         items = []
         for i in top_idx:
             row = self.df.iloc[i]
